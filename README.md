@@ -1,111 +1,163 @@
-# ⌨️ TypeZone — Speed Typing Practice Platform
+# TypeZone
 
-**TypeZone** is a browser-based typing speed improvement platform that allows users to practice typing through different game modes and track their performance in a responsive, user-friendly environment.
+TypeZone is a modern MERN typing platform with secure authentication, persistent progress tracking, real-time race rooms, and a clean dashboard for daily practice.
 
----
+## Highlights
 
-## 📁 Folder Structure
+- Full-stack architecture with isolated client and server apps
+- JWT access token + refresh token cookie authentication
+- MongoDB-backed typing history, user stats, and leaderboard state
+- Real-time race room updates over Socket.io
+- Multi-mode typing engine with live metrics and trend visualization
+- Container-ready local deployment with Docker Compose
 
-```
-Type-Zone-main/
-└── Type-Zone-main/
-    ├── README.md             # Project documentation
-    ├── TypeZone Zip.zip      # Archived project (backup or deployable version)
-    ├── about.html            # About page describing the platform
-    ├── index.html            # Home page with typing game interface
-    ├── login.html            # Login/Signup page with validation
-    ├── login.js              # JavaScript logic for login/signup handling
-    ├── logo.jpg              # Branding image/logo
-    ├── script.js             # Main logic for typing speed calculation
-    ├── styles.css            # Styling and layout using CSS
-```
+## Tech Stack
 
----
+### Frontend
 
-## 🧩 Overview
+- React + Vite
+- React Router
+- Axios
+- Tailwind CSS
+- Recharts
+- Socket.io client
 
-TypeZone offers a smooth and engaging way to improve your typing speed through:
-- 📜 Real-time text prompts
-- ⏱️ Time-based challenges
-- 📈 Speed calculation and WPM tracking
-- 🔐 Login/signup system with basic email-password verification
-- 💻 Responsive layout built using **HTML, CSS, and JavaScript**
+### Backend
 
----
+- Node.js + Express
+- MongoDB + Mongoose
+- JWT + bcrypt
+- Zod validation
+- Helmet, rate limiting, sanitize middleware
+- Socket.io server
 
-## 💡 Key Features
+## Project Structure
 
-### 1. 🎮 Typing Game Interface
-- Random prompts to test speed
-- Measures typing speed (WPM) and accuracy
-- Real-time feedback
-
-### 2. 🧪 Login/Signup System
-- **Email & password** form with client-side JavaScript validation
-- Stores user session info (name shown with profile icon after login)
-- Prevents duplicate email registration
-
-### 3. 📄 About Page
-- Information on project intent
-- Tips on how to use the platform
-
-### 4. 🎨 UI/UX Design
-- Dark theme UI
-- Responsive across devices
-- Designed with custom CSS
-
----
-
-## ⚙️ Technologies Used
-
-| Technology     | Description                                 |
-|----------------|---------------------------------------------|
-| HTML5          | Page structure                              |
-| CSS3           | Styling and layout                          |
-| JavaScript     | Dynamic functionality & validation          |
-| Bootstrap (optional) | For responsive components if used      |
-
----
-
-## 🚀 How to Use
-
-1. 📥 Download or clone the repository
-2. 🔓 Open `login.html` in browser to log in or sign up
-3. ▶️ Navigate to `index.html` to start typing practice
-4. 📋 View stats like speed and accuracy
-5. 🔁 Try again to improve your score!
-
-> Note: No backend or database required — all logic is handled in the browser using JavaScript.
-
----
-
-## 🧪 Login Validation Details
-
-Validation using JavaScript ensures:
-- Email follows correct format (using Regex)
-- Password is not empty
-- Prevents same email registration twice
-
-Example check:
-```js
-if (existingUsers.includes(email)) {
-    alert("Email already registered");
-}
+```text
+TypeZone/
+  client/                  # React app
+  server/                  # Express API
+  docs/                    # API documentation
+  docker-compose.yml       # Local multi-service orchestration
 ```
 
+## Core Features
 
----
+### Authentication
 
-## 🔮 Future Scope
+- Register and login endpoints
+- Password hashing via bcrypt
+- Access token authorization for protected routes
+- Refresh token rotation with secure cookie handling
 
-- 📊 Add typing history and leaderboard
-- 🧠 Include difficulty modes (easy, medium, hard)
-- 🌍 Add support for multiple languages
-- 📥 Export performance reports (PDF)
-- 🧾 Integrate backend to store user sessions
+### Typing Engine
 
----
+- Modes: words, quote, numbers, code, punctuation
+- Time presets: 15s, 30s, 60s, 120s
+- Live WPM, accuracy, and error tracking
+- Progress bar and restart/finish controls
+- Custom text support for focused practice
 
+### Analytics
 
+- Session history retrieval
+- Personal performance summaries
+- Trend chart rendering for WPM and accuracy
+- Mistake heatmap summary for each run
 
-✍️ _Improve your typing speed one keystroke at a time with TypeZone._
+### Competitive Layer
+
+- Global leaderboard endpoint
+- Daily challenge endpoint
+- Real-time race rooms with progress and winner broadcast
+
+## Security Measures
+
+- Helmet security headers
+- API and auth rate limiting
+- Mongo query sanitization
+- HTTP parameter pollution protection
+- XSS request sanitization
+- Centralized API error handling with validated payloads
+
+## Local Development
+
+### Prerequisites
+
+- Node.js 20+
+- npm 10+
+- MongoDB local instance or Atlas connection string
+
+### Setup
+
+1. Install root dependencies
+
+```bash
+npm install
+```
+
+2. Configure environment files
+
+- Copy server/.env.example to server/.env
+- Set at minimum:
+  - MONGO_URI
+  - JWT_SECRET
+  - CLIENT_ORIGIN
+
+3. Start development servers
+
+```bash
+npm run dev
+```
+
+### Default Local URLs
+
+- Frontend: http://localhost:5173
+- API: http://localhost:5000
+
+## Build and Run
+
+### Frontend production build
+
+```bash
+npm run build
+```
+
+### Backend production start
+
+```bash
+npm run start
+```
+
+## Docker
+
+Run all services together:
+
+```bash
+docker compose up --build
+```
+
+Service endpoints:
+
+- Client: http://localhost:8080
+- Server: http://localhost:5000
+- MongoDB: mongodb://localhost:27017
+
+## API Docs
+
+Detailed route reference is available in docs/API.md.
+
+## Deployment Guidance
+
+- Frontend: Vercel or Netlify
+- Backend: Render, Railway, AWS, or Fly.io
+- Database: MongoDB Atlas
+
+Use separate environment variables per environment and rotate secrets regularly.
+
+## Current Status
+
+- Legacy static pages removed
+- Unified MERN workflow active
+- Security middleware baseline in place
+- Test-only artifacts removed from this branch
