@@ -7,7 +7,11 @@ const typingStatsSchema = new mongoose.Schema(
         averageAccuracy: { type: Number, default: 0 },
         testsCompleted: { type: Number, default: 0 },
         streakDays: { type: Number, default: 0 },
-        lastPracticeDate: { type: Date }
+        lastPracticeDate: { type: Date },
+        xp: { type: Number, default: 0 },
+        level: { type: Number, default: 1 },
+        rankedRating: { type: Number, default: 1000 },
+        ratingLastUpdatedAt: { type: Date }
     },
     { _id: false }
 );
@@ -16,6 +20,14 @@ const settingsSchema = new mongoose.Schema(
     {
         theme: { type: String, default: 'dark' },
         soundEnabled: { type: Boolean, default: true },
+        keypressSoundEnabled: { type: Boolean, default: true },
+        ambienceEnabled: { type: Boolean, default: false },
+        ambienceVolume: { type: Number, min: 0, max: 1, default: 0.2 },
+        typingSoundProfile: { 
+            type: String, 
+            enum: ['classic', 'soft', 'clicky', 'mechanical', 'typewriter', 'spring', 'silent'],
+            default: 'classic' 
+        },
         keyboardOnlyMode: { type: Boolean, default: true },
         language: { type: String, default: 'english' }
     },
@@ -46,6 +58,11 @@ const userSchema = new mongoose.Schema(
         avatar: {
             type: String,
             default: ''
+        },
+        isAdmin: {
+            type: Boolean,
+            default: false,
+            index: true
         },
         typingStats: {
             type: typingStatsSchema,

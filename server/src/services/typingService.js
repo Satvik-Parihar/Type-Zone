@@ -5,8 +5,18 @@ const User = require('../models/User');
 const { buildTypingText } = require('../utils/textPool');
 const { syncLeaderboardForUser } = require('./leaderboardService');
 
+const K_FACTOR = 32;
+
 function generateTextId() {
     return crypto.randomBytes(8).toString('hex');
+}
+
+function calculateExpectedScore(rating1, rating2) {
+    return 1 / (1 + Math.pow(10, (rating2 - rating1) / 400));
+}
+
+function updateELO(currentRating, expectedScore, actualScore, kFactor = K_FACTOR) {
+    return Math.round(currentRating + kFactor * (actualScore - expectedScore));
 }
 
 function nextStreak(lastPracticeDate) {
@@ -23,21 +33,53 @@ function nextStreak(lastPracticeDate) {
     return 'reset';
 }
 
-async function startTypingSession({ userId, mode, wordCount }) {
+function buildMistakeFrequency(keystrokeTimeline = [], keyMistakes = {}) {
+    const next = {};
+
+    for (const [key, count] of Object.entries(keyMistakes || {})) {
+        next[key] = (next[key] || 0) + count;
+    }
+
+    for (const stroke of keystrokeTimeline) {
+        if (!stroke.isError) continue;
+        const key = String(stroke.expectedKey || stroke.key || '?').toLowerCase();
+        next[key] = (next[key] || 0) + 1;
+    }
+
+    return next;
+}
+
+async function startTypingSession({ userId, mode, difficulty, wordCount, timeLimit, customText, weakKeys }) {
     return {
         textId: generateTextId(),
-        text: buildTypingText(mode, { wordCount })
+        text: buildTypingText(mode, { wordCount, difficulty, timeLimit, customText, weakKeys })
     };
 }
 
 async function submitTypingSession(payload) {
     const session = await TypingSession.create(payload);
 
+    const keystrokeTimeline = payload.keystrokeTimeline || [];
+    const keystrokeTimings = keystrokeTimeline
+        .map((stroke) => stroke.deltaMs || 0)
+        .filter((delta) => delta > 0);
+    const mistakeFrequency = buildMistakeFrequency(keystrokeTimeline, payload.keyMistakes);
+
     await TypingHistory.create({
         userId: payload.userId,
         sessionId: session._id,
         dailyChallenge: false,
-        heatmap: []
+        heatmap: Object.values(mistakeFrequency),
+        wpmHistory: [payload.wpm],
+        accuracyHistory: [payload.accuracy],
+        sessionDuration: payload.timeTaken,
+        mistakeFrequency,
+        correctionPatterns: payload.correctionPatterns || {
+            backspaceCorrections: 0,
+            replacedErrors: 0
+        },
+        keystrokeTimings,
+        keystrokeCount: keystrokeTimeline.length
     });
 
     const user = await User.findById(payload.userId);
@@ -60,6 +102,9 @@ async function submitTypingSession(payload) {
         user.typingStats.streakDays = 1;
     }
     user.typingStats.lastPracticeDate = new Date();
+    const sessionXp = Math.round((payload.wpm * 1.5) + (payload.accuracy * 0.8) + (payload.consistency || 0));
+    user.typingStats.xp = (user.typingStats.xp || 0) + sessionXp;
+    user.typingStats.level = Math.max(1, Math.floor(user.typingStats.xp / 400) + 1);
 
     await user.save();
     await syncLeaderboardForUser(user);
@@ -69,5 +114,7 @@ async function submitTypingSession(payload) {
 
 module.exports = {
     startTypingSession,
-    submitTypingSession
+    submitTypingSession,
+    calculateExpectedScore,
+    updateELO
 };

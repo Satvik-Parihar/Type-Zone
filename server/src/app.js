@@ -14,6 +14,7 @@ const leaderboardRoutes = require('./routes/leaderboardRoutes');
 const challengeRoutes = require('./routes/challengeRoutes');
 const achievementRoutes = require('./routes/achievementRoutes');
 const historyRoutes = require('./routes/historyRoutes');
+const tournamentRoutes = require('./routes/tournamentRoutes');
 
 const app = express();
 
@@ -38,6 +39,7 @@ app.use('/api/leaderboard', leaderboardRoutes);
 app.use('/api/challenges', challengeRoutes);
 app.use('/api/achievements', achievementRoutes);
 app.use('/api/history', historyRoutes);
+app.use('/api/tournaments', tournamentRoutes);
 
 app.use(notFoundHandler);
 app.use(errorHandler);
