@@ -14,7 +14,7 @@ const typingSessionSchema = new mongoose.Schema(
         },
         mode: {
             type: String,
-            enum: ['words', 'quote', 'time', 'numbers', 'code', 'punctuation'],
+            enum: ['words', 'quote', 'time', 'numbers', 'code', 'punctuation', 'sentence', 'paragraph', 'zen', 'practice', 'challenge', 'custom'],
             default: 'words'
         },
         wpm: {
@@ -33,6 +33,22 @@ const typingSessionSchema = new mongoose.Schema(
             min: 0,
             required: true
         },
+        rawWpm: {
+            type: Number,
+            min: 0,
+            default: 0
+        },
+        consistency: {
+            type: Number,
+            min: 0,
+            max: 100,
+            default: 100
+        },
+        keystrokesPerSecond: {
+            type: Number,
+            min: 0,
+            default: 0
+        },
         timeTaken: {
             type: Number,
             min: 1,
@@ -41,6 +57,23 @@ const typingSessionSchema = new mongoose.Schema(
         rawInput: {
             type: String,
             default: ''
+        },
+        keystrokeTimeline: {
+            type: [
+                new mongoose.Schema(
+                    {
+                        key: { type: String, required: true },
+                        expectedKey: { type: String, default: '' },
+                        timestamp: { type: Number, required: true },
+                        deltaMs: { type: Number, default: 0 },
+                        position: { type: Number, default: 0 },
+                        isError: { type: Boolean, default: false },
+                        isCorrection: { type: Boolean, default: false }
+                    },
+                    { _id: false }
+                )
+            ],
+            default: []
         }
     },
     {

@@ -65,6 +65,36 @@ export const themes = {
     accent: '#34d399',
     success: '#22c55e',
     error: '#f87171'
+  },
+  cyberpunk: {
+    name: 'Cyberpunk Grid',
+    bg: '#0b0520',
+    panel: '#170d36',
+    text: '#f9c8ff',
+    muted: '#c084fc',
+    accent: '#22d3ee',
+    success: '#4ade80',
+    error: '#fb7185'
+  },
+  dracula: {
+    name: 'Dracula',
+    bg: '#282a36',
+    panel: '#1e1f29',
+    text: '#f8f8f2',
+    muted: '#bd93f9',
+    accent: '#8be9fd',
+    success: '#50fa7b',
+    error: '#ff5555'
+  },
+  retro: {
+    name: 'Retro Terminal',
+    bg: '#081b09',
+    panel: '#102811',
+    text: '#b9ff8f',
+    muted: '#6fbf62',
+    accent: '#facc15',
+    success: '#84cc16',
+    error: '#f87171'
   }
 };
 
@@ -88,6 +118,10 @@ export function generateWordSet(words, wordCount) {
 
 export function generatePrompt(mode, wordCount, language = 'english') {
   const bank = textSamples[language];
+  if (mode === 'sentence') {
+    const paragraph = bank.paragraphs[Math.floor(Math.random() * bank.paragraphs.length)];
+    return paragraph.split('.').find((part) => part.trim())?.trim().concat('.') || paragraph;
+  }
   if (mode === 'paragraph') {
     return bank.paragraphs[Math.floor(Math.random() * bank.paragraphs.length)];
   }
@@ -102,6 +136,12 @@ export function generatePrompt(mode, wordCount, language = 'english') {
   }
   if (mode === 'code') {
     return bank.code[Math.floor(Math.random() * bank.code.length)];
+  }
+  if (mode === 'custom') {
+    return bank.paragraphs[Math.floor(Math.random() * bank.paragraphs.length)];
+  }
+  if (mode === 'zen' || mode === 'practice' || mode === 'challenge' || mode === 'time') {
+    return generateWordSet(bank.words, Math.max(120, wordCount));
   }
   return generateWordSet(bank.words, wordCount);
 }

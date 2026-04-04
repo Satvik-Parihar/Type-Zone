@@ -3,13 +3,16 @@
   "version": "1.0.0",
   "description": "Production-grade MERN TypeZone workspace",
   "scripts": {
-    "test": "echo \"No automated tests configured\"",
+    "test": "npm --prefix server run test",
+    "test:server": "npm --prefix server run test",
+    "test:client": "npm --prefix client run test",
     "start": "npm --prefix server run start",
     "dev": "concurrently \"npm:dev:server\" \"npm:dev:client\"",
     "dev:server": "npm --prefix server run dev",
     "dev:client": "npm --prefix client run dev",
     "build": "npm --prefix client run build",
-    "lint": "echo \"Add linting setup as needed\""
+    "lint": "eslint \"client/src/**/*.{js,jsx}\" \"server/src/**/*.js\"",
+    "format": "prettier --write \"**/*.{js,jsx,json,md,css}\""
   },
   "repository": {
     "type": "git",
@@ -23,7 +26,10 @@
   },
   "homepage": "https://github.com/Satvik-Parihar/Type-Zone#readme",
   "devDependencies": {
+    "@eslint/js": "^9.39.1",
     "concurrently": "^9.2.1",
+    "eslint": "^9.37.0",
+    "prettier": "^3.6.2",
     "serve": "^14.2.6"
   },
   "private": true,
