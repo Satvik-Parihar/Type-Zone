@@ -1,176 +1,126 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { generatePrompt } from '../utils/typingData';
+import { useEffect, useState } from 'react';
+import { motion } from 'framer-motion';
+import TypingArea from '../components/TypingArea';
+import { Clock, Target, Zap } from 'lucide-react';
 
-const WORD_COUNT = 40;
+const samplePrompts = [
+  'The sunrise painted the sky with gold and violet.',
+  'Precision matters more than speed in the early stages.',
+  'Every keystroke shapes your rhythm and consistency.',
+];
 
-export default function TypingPage() {
-  const [prompt, setPrompt] = useState('');
-  const [inputValue, setInputValue] = useState('');
-  const [startedAt, setStartedAt] = useState(null);
-  const [elapsed, setElapsed] = useState(0);
-  const [finished, setFinished] = useState(false);
-  const intervalRef = useRef(null);
+const TypingPage = () => {
+  const [mode, setMode] = useState('time');
+  const [duration, setDuration] = useState(60);
+  const [text, setText] = useState(samplePrompts[0]);
+
+  const timeOptions = [15, 30, 60, 120];
+  const wordOptions = [10, 25, 50, 100];
 
   useEffect(() => {
-    resetTest();
-    return () => clearInterval(intervalRef.current);
-  }, []);
-
-  useEffect(() => {
-    if (!startedAt || finished) {
-      clearInterval(intervalRef.current);
-      return;
-    }
-
-    intervalRef.current = window.setInterval(() => {
-      setElapsed(Math.max(1, Math.round((Date.now() - startedAt) / 1000)));
-    }, 250);
-
-    return () => clearInterval(intervalRef.current);
-  }, [startedAt, finished]);
-
-  const promptChars = useMemo(() => prompt.split(''), [prompt]);
-  const typedChars = useMemo(() => inputValue.split(''), [inputValue]);
-
-  const stats = useMemo(() => {
-    const correctCount = promptChars.reduce((count, char, index) => {
-      return count + (typedChars[index] === char ? 1 : 0);
-    }, 0);
-
-    const typedLength = Math.max(1, typedChars.length);
-    const accuracy = Math.round((correctCount / typedLength) * 100);
-    const words = Math.round(correctCount / 5);
-    const minutes = Math.max(1 / 60, elapsed / 60);
-    const wpm = Math.round(words / minutes);
-    const errors = typedChars.reduce((count, char, index) => {
-      if (index >= promptChars.length) return count + 1;
-      return count + (char !== promptChars[index] ? 1 : 0);
-    }, 0);
-
-    return {
-      accuracy: Number.isNaN(accuracy) ? 100 : Math.max(0, accuracy),
-      wpm: finished ? Math.round((correctCount / 5) / Math.max(1, elapsed / 60)) : Math.max(0, Math.round(words / minutes)),
-      errors,
-      correctCount,
-    };
-  }, [promptChars, typedChars, elapsed, finished]);
-
-  const characterRows = useMemo(() => {
-    return promptChars.map((char, index) => {
-      const typedChar = typedChars[index];
-      let status = 'pending';
-
-      if (typedChar === undefined) {
-        status = 'pending';
-      } else if (typedChar === char) {
-        status = 'correct';
-      } else {
-        status = 'incorrect';
+    const handleShortcut = (event) => {
+      if (event.key === 'Tab') {
+        event.preventDefault();
+        setMode((current) => (current === 'time' ? 'words' : 'time'));
       }
 
-      return { char, status, index };
-    });
-  }, [promptChars, typedChars]);
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'r') {
+        event.preventDefault();
+        window.dispatchEvent(new Event('typezone-reset'));
+      }
+    };
 
-  const handleInput = (event) => {
-    const value = event.target.value;
+    window.addEventListener('keydown', handleShortcut);
+    return () => window.removeEventListener('keydown', handleShortcut);
+  }, []);
 
-    if (!startedAt && value.length > 0) {
-      setStartedAt(Date.now());
-    }
-
-    if (finished) {
-      return;
-    }
-
-    if (value.length >= prompt.length) {
-      setInputValue(value.slice(0, prompt.length));
-      setFinished(true);
-      return;
-    }
-
-    setInputValue(value);
-  };
-
-  const resetTest = () => {
-    clearInterval(intervalRef.current);
-    const nextPrompt = generatePrompt('sentence', WORD_COUNT);
-    setPrompt(nextPrompt);
-    setInputValue('');
-    setStartedAt(null);
-    setElapsed(0);
-    setFinished(false);
+  const handleComplete = (metrics) => {
+    console.log('Results:', metrics);
   };
 
   return (
-    <section className="page-section typing-page">
-      <div className="section-header">
-        <p className="eyebrow">Typing Test</p>
-        <h1>Train speed, accuracy, and focus in every session.</h1>
-        <p className="section-subtitle">
-          Type the prompt below, watch errors appear in real time, and track your progress with clear metrics.
-        </p>
-      </div>
+    <div className="min-h-screen bg-background pt-12 px-4 sm:px-6 lg:px-8 pb-20">
+      <div className="max-w-6xl mx-auto">
+        <motion.div
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="text-center mb-12"
+        >
+          <p className="text-xs uppercase tracking-widest text-text-secondary font-semibold mb-3">Typing test</p>
+          <h1 className="text-5xl sm:text-6xl font-bold text-text mb-4 leading-tight">Build speed with structure</h1>
+          <p className="text-lg text-text-secondary max-w-3xl mx-auto">
+            Switch between time and word mode, push your consistency, and master accuracy under pressure.
+          </p>
+        </motion.div>
 
-      <div className="typing-grid">
-        <div className="typing-card glass-panel">
-          <div className="typing-preview" aria-label="Typing prompt">
-            <div className="typing-line">
-              {characterRows.map(({ char, status, index }) => (
-                <span
-                  key={`${char}-${index}`}
-                  className={`typing-char ${status} ${index === inputValue.length ? 'current' : ''}`}
+        <motion.div
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
+          className="glass-panel p-6 sm:p-7 mb-10"
+        >
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_auto] items-center">
+            <div className="space-y-4">
+              <div className="inline-flex items-center gap-3 rounded-lg bg-card/60 backdrop-blur-sm px-4 py-2.5 border border-border-dark text-xs text-text-secondary font-semibold uppercase tracking-wider">
+                <Zap className="w-4 h-4 text-accent" />
+                Tab to switch mode • Ctrl + R to restart
+              </div>
+              <div className="flex flex-wrap gap-3">
+                <button
+                  type="button"
+                  onClick={() => setMode('time')}
+                  className={`rounded-lg px-5 py-2.5 text-sm font-semibold transition-all duration-300 ${
+                    mode === 'time' ? 'btn-primary' : 'btn-secondary'
+                  }`}
                 >
-                  {char}
-                  {index === inputValue.length && !finished && <span className="typing-caret" />}
-                </span>
+                  <Clock className="w-4 h-4 inline-block mr-2" /> Time
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMode('words')}
+                  className={`rounded-lg px-5 py-2.5 text-sm font-semibold transition-all duration-300 ${
+                    mode === 'words' ? 'btn-primary' : 'btn-secondary'
+                  }`}
+                >
+                  <Target className="w-4 h-4 inline-block mr-2" /> Words
+                </button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 lg:grid-cols-auto">
+              {(mode === 'time' ? timeOptions : wordOptions).map((value) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => setDuration(value)}
+                  className={`rounded-lg px-4 py-2.5 text-sm font-semibold transition-all duration-300 ${
+                    duration === value 
+                      ? 'btn-primary' 
+                      : 'bg-card/60 border border-border-dark text-text-secondary hover:border-accent hover:text-accent'
+                  }`}
+                >
+                  {mode === 'time' ? `${value}s` : `${value}w`}
+                </button>
               ))}
             </div>
           </div>
+        </motion.div>
 
-          <label className="form-label" htmlFor="typing-input">
-            Start typing below
-          </label>
-          <textarea
-            id="typing-input"
-            className="typing-input"
-            value={inputValue}
-            onChange={handleInput}
-            placeholder="Begin typing the passage above..."
-            rows={5}
-            spellCheck="false"
+        <motion.div
+          initial={{ opacity: 0, scale: 0.98 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ delay: 0.35 }}
+        >
+          <TypingArea
+            text={text}
+            mode={mode}
+            duration={duration}
+            onComplete={handleComplete}
           />
-
-          <div className="typing-actions">
-            <button type="button" className="btn btn-secondary" onClick={resetTest}>
-              Reset Test
-            </button>
-            <div className="typing-summary">
-              <span>{finished ? 'Finished' : 'Live'}</span>
-              <span>{elapsed}s</span>
-            </div>
-          </div>
-        </div>
-
-        <aside className="typing-sidebar">
-          <div className="stat-card">
-            <span className="stat-label">WPM</span>
-            <strong>{stats.wpm}</strong>
-          </div>
-          <div className="stat-card">
-            <span className="stat-label">Accuracy</span>
-            <strong>{stats.accuracy}%</strong>
-          </div>
-          <div className="stat-card">
-            <span className="stat-label">Errors</span>
-            <strong>{stats.errors}</strong>
-          </div>
-          <div className="stat-card">
-            <span className="stat-label">Characters</span>
-            <strong>{prompt.length}</strong>
-          </div>
-        </aside>
+        </motion.div>
       </div>
-    </section>
+    </div>
   );
-}
+};
+
+export default TypingPage;

@@ -23,8 +23,17 @@ async function start() {
 
         setupRaceSocket(io);
 
-        server.listen(PORT, () => {
+        server.listen(PORT, '127.0.0.1', () => {
             console.log(`TypeZone API running on http://localhost:${PORT}`);
+        });
+
+        server.on('error', (err) => {
+            if (err.code === 'EADDRINUSE') {
+                console.error(`Port ${PORT} is already in use. Please close other instances or change PORT env var.`);
+            } else {
+                console.error('Server error:', err);
+            }
+            process.exit(1);
         });
     } catch (error) {
         console.error('Failed to start API:', error.message);

@@ -19,7 +19,7 @@ const authLimiter = rateLimit({
 
 function applySecurityMiddleware(app) {
     app.use(helmet());
-    app.use(mongoSanitize());
+    app.use(mongoSanitize({ onSanitize: { replaceWith: '_' } }));
     app.use(hpp());
     app.use('/api', apiLimiter);
     app.use('/api/auth', authLimiter);
