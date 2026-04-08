@@ -4,7 +4,7 @@ const http = require('http');
 const { Server } = require('socket.io');
 const { connectDb } = require('./config/db');
 const { getCorsOptions } = require('./config/cors');
-const { setupRaceSocket } = require('./sockets/raceSocket');
+const setupRaceSocket = require('./sockets/raceSocket');
 
 const PORT = process.env.PORT || 5000;
 

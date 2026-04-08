@@ -1,314 +1,338 @@
 const User = require('../models/User');
-const { calculateExpectedScore, updateELO } = require('../services/typingService');
 
-const raceRooms = new Map();
-const rankedQueue = [];
-const RANK_BUCKET = 120;
-const DECAY_INTERVAL_MS = 10000;
+const rooms = new Map();
+const activeRaces = new Map();
 
-function clamp(value, min, max) {
-    return Math.min(max, Math.max(min, value));
+function generateRoomId() {
+  return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
 }
 
-function ensureRoom(roomId, roomType = 'public') {
-    if (!raceRooms.has(roomId)) {
-        raceRooms.set(roomId, {
-            id: roomId,
-            type: roomType,
-            createdAt: Date.now(),
-            players: new Map(),
-            spectators: new Map(),
-            ghostRuns: []
-        });
+function createRoom(name, host, isPrivate = false, password = null) {
+  const roomId = generateRoomId();
+  const room = {
+    id: roomId,
+    name,
+    host,
+    isPrivate,
+    password,
+    players: new Map(),
+    maxPlayers: 8,
+    createdAt: new Date(),
+    status: 'waiting' // waiting, starting, active, finished
+  };
+
+  // Add host as first player
+  room.players.set(host.id, {
+    id: host.id,
+    username: host.username,
+    ready: false,
+    joinedAt: new Date(),
+    wpm: 0,
+    accuracy: 0,
+    progress: 0,
+    finished: false,
+    finishTime: null
+  });
+
+  rooms.set(roomId, room);
+  return room;
+}
+
+function getPublicRooms() {
+  return Array.from(rooms.values())
+    .filter(room => !room.isPrivate)
+    .map(room => ({
+      id: room.id,
+      name: room.name,
+      host: {
+        id: room.host.id,
+        username: room.host.username
+      },
+      players: Array.from(room.players.values()).map(p => ({
+        id: p.id,
+        username: p.username
+      })),
+      maxPlayers: room.maxPlayers,
+      createdAt: room.createdAt,
+      isPrivate: room.isPrivate
+    }));
+}
+
+function startRaceCountdown(io, roomId) {
+  const room = rooms.get(roomId);
+  if (!room || room.status !== 'waiting') return;
+
+  room.status = 'starting';
+
+  let countdown = 3;
+  const countdownInterval = setInterval(() => {
+    io.to(roomId).emit('race:countdown', countdown);
+
+    if (countdown === 0) {
+      clearInterval(countdownInterval);
+      startRace(io, roomId);
     }
-    return raceRooms.get(roomId);
+    countdown--;
+  }, 1000);
 }
 
-function buildState(room) {
-    return {
-        roomId: room.id,
-        roomType: room.type,
-        playerCount: room.players.size,
-        spectatorCount: room.spectators.size,
-        players: Array.from(room.players.values())
-            .sort((a, b) => {
-                if (a.finished && b.finished) return a.finishedAt - b.finishedAt;
-                if (a.finished) return -1;
-                if (b.finished) return 1;
-                return b.progress - a.progress;
-            }),
-        spectators: Array.from(room.spectators.values()),
-        ghostRuns: room.ghostRuns.slice(0, 5)
-    };
+function startRace(io, roomId) {
+  const room = rooms.get(roomId);
+  if (!room) return;
+
+  room.status = 'active';
+  room.startTime = Date.now();
+
+  // Generate race text (simplified)
+  const raceText = "The quick brown fox jumps over the lazy dog. This is a sample typing race text that participants will type as fast and accurately as possible.";
+
+  const raceData = {
+    roomId,
+    text: raceText,
+    startTime: room.startTime,
+    players: Array.from(room.players.values())
+  };
+
+  activeRaces.set(roomId, raceData);
+
+  io.to(roomId).emit('race:started', raceData);
 }
 
-function emitState(io, room) {
-    io.to(room.id).emit('race:state', buildState(room));
-}
+function updatePlayerProgress(roomId, playerId, progress, wpm, accuracy) {
+  const room = rooms.get(roomId);
+  if (!room || room.status !== 'active') return;
 
-function maybeCleanupRoom(roomId) {
-    const room = raceRooms.get(roomId);
-    if (!room) return;
-    if (room.players.size === 0 && room.spectators.size === 0) {
-        raceRooms.delete(roomId);
+  const player = room.players.get(playerId);
+  if (!player) return;
+
+  player.progress = progress;
+  player.wpm = wpm;
+  player.accuracy = accuracy;
+
+  // Check if player finished
+  if (progress >= 100 && !player.finished) {
+    player.finished = true;
+    player.finishTime = (Date.now() - room.startTime) / 1000;
+
+    // Check if all players finished
+    const activePlayers = Array.from(room.players.values()).filter(p => !p.finished);
+    if (activePlayers.length === 0) {
+      finishRace(roomId);
     }
+  }
+
+  // Broadcast progress update
+  const raceData = activeRaces.get(roomId);
+  if (raceData) {
+    raceData.players = Array.from(room.players.values());
+  }
 }
 
-function effectiveBucket(entry, now = Date.now()) {
-    const waitedMs = now - entry.joinedAt;
-    const expansions = Math.floor(waitedMs / DECAY_INTERVAL_MS);
-    return RANK_BUCKET + (expansions * 40);
+function finishRace(roomId) {
+  const room = rooms.get(roomId);
+  if (!room) return;
+
+  room.status = 'finished';
+
+  const finishedPlayers = Array.from(room.players.values())
+    .filter(p => p.finished)
+    .sort((a, b) => a.finishTime - b.finishTime);
+
+  const winner = finishedPlayers[0];
+
+  const raceResult = {
+    roomId,
+    winner,
+    players: finishedPlayers,
+    finishedAt: new Date()
+  };
+
+  // Clean up
+  activeRaces.delete(roomId);
+  // Keep room for a few minutes before cleanup
+  setTimeout(() => {
+    rooms.delete(roomId);
+  }, 5 * 60 * 1000); // 5 minutes
+
+  return raceResult;
 }
 
-function isRankCompatible(a, b, now = Date.now()) {
-    const distance = Math.abs((a.skill || 0) - (b.skill || 0));
-    return distance <= Math.max(effectiveBucket(a, now), effectiveBucket(b, now));
-}
+module.exports = (io) => {
+  io.on('connection', (socket) => {
+    console.log('User connected:', socket.id);
 
-function tryMatchRankedQueue(io) {
-    if (rankedQueue.length < 2) return;
-
-    rankedQueue.sort((a, b) => a.joinedAt - b.joinedAt);
-    const now = Date.now();
-
-    for (let i = 0; i < rankedQueue.length; i += 1) {
-        const first = rankedQueue[i];
-
-        let matchedIndex = -1;
-        for (let j = i + 1; j < rankedQueue.length; j += 1) {
-            const second = rankedQueue[j];
-            if (isRankCompatible(first, second, now)) {
-                matchedIndex = j;
-                break;
-            }
-        }
-
-        if (matchedIndex >= 0) {
-            const second = rankedQueue[matchedIndex];
-            rankedQueue.splice(matchedIndex, 1);
-            rankedQueue.splice(i, 1);
-
-            const roomId = `ranked-${Date.now()}-${Math.random().toString(16).slice(2, 7)}`;
-            io.to(first.socketId).emit('race:rankedMatch', { roomId, opponent: second.username });
-            io.to(second.socketId).emit('race:rankedMatch', { roomId, opponent: first.username });
-
-            io.to(first.socketId).emit('race:queueMeta', {
-                skill: first.skill,
-                bucket: effectiveBucket(first, now),
-                decayApplied: now - first.joinedAt
-            });
-            io.to(second.socketId).emit('race:queueMeta', {
-                skill: second.skill,
-                bucket: effectiveBucket(second, now),
-                decayApplied: now - second.joinedAt
-            });
-
-            return;
-        }
-    }
-}
-
-function setupRaceSocket(io) {
-    setInterval(() => {
-        tryMatchRankedQueue(io);
-    }, 2000);
-
-    io.on('connection', (socket) => {
-        socket.on('race:join', ({ roomId, username, isSpectator = false, privateRoom = false, ghostRun = null, userId = null }) => {
-            if (!roomId || !username) return;
-
-            const room = ensureRoom(roomId, privateRoom ? 'private' : 'public');
-            socket.join(roomId);
-
-            if (isSpectator) {
-                room.spectators.set(socket.id, { username, joinedAt: Date.now() });
-                emitState(io, room);
-                return;
-            }
-
-            room.players.set(socket.id, {
-                socketId: socket.id,
-                username,
-                userId,
-                progress: 0,
-                finished: false,
-                finishedAt: 0,
-                wpm: 0,
-                accuracy: 100,
-                joinedAt: Date.now(),
-                rank: null
-            });
-
-            if (ghostRun) {
-                room.ghostRuns.unshift({
-                    username: ghostRun.username || `${username}-ghost`,
-                    wpm: clamp(Number(ghostRun.wpm) || 0, 0, 400),
-                    recordedAt: Date.now()
-                });
-            }
-
-            emitState(io, room);
-        });
-
-        socket.on('race:queueRanked', ({ username, skill = 0, userId = null }) => {
-            if (!username) return;
-
-            const existingIndex = rankedQueue.findIndex((item) => item.socketId === socket.id);
-            if (existingIndex >= 0) {
-                rankedQueue.splice(existingIndex, 1);
-            }
-
-            rankedQueue.push({
-                socketId: socket.id,
-                username,
-                userId,
-                skill: clamp(Number(skill) || 0, 0, 400),
-                joinedAt: Date.now()
-            });
-
-            tryMatchRankedQueue(io);
-        });
-
-        socket.on('race:leaveQueue', () => {
-            const index = rankedQueue.findIndex((item) => item.socketId === socket.id);
-            if (index >= 0) {
-                rankedQueue.splice(index, 1);
-            }
-        });
-
-        socket.on('race:progress', ({ roomId, progress, wpm, accuracy }) => {
-            const room = raceRooms.get(roomId);
-            if (!room) return;
-
-            const player = room.players.get(socket.id);
-            if (!player) return;
-
-            player.progress = clamp(Number(progress) || 0, 0, 100);
-            player.wpm = clamp(Number(wpm) || 0, 0, 400);
-            player.accuracy = clamp(Number(accuracy) || 0, 0, 100);
-
-            emitState(io, room);
-        });
-
-        socket.on('race:ghost', ({ roomId, progress, wpm }) => {
-            const room = raceRooms.get(roomId);
-            if (!room) return;
-
-            io.to(roomId).emit('race:ghostProgress', {
-                socketId: socket.id,
-                progress: clamp(Number(progress) || 0, 0, 100),
-                wpm: clamp(Number(wpm) || 0, 0, 400)
-            });
-        });
-
-        socket.on('race:finish', async ({ roomId, wpm, accuracy }) => {
-            const room = raceRooms.get(roomId);
-            if (!room) return;
-
-            const player = room.players.get(socket.id);
-            if (!player || player.finished) return;
-
-            player.finished = true;
-            player.progress = 100;
-            player.wpm = clamp(Number(wpm) || 0, 0, 400);
-            player.accuracy = clamp(Number(accuracy) || 0, 0, 100);
-            player.finishedAt = Date.now();
-
-            // Only rank players who finished
-            const finishedPlayers = Array.from(room.players.values()).filter((p) => p.finished);
-            const sorted = finishedPlayers.sort((a, b) => {
-                if (a.finishedAt === b.finishedAt) return b.wpm - a.wpm;
-                return a.finishedAt - b.finishedAt;
-            });
-
-            sorted.forEach((entry, index) => {
-                entry.rank = index + 1;
-            });
-
-            const winner = sorted[0];
-            if (winner) {
-                io.to(roomId).emit('race:finished', {
-                    winner: winner.username,
-                    wpm: winner.wpm,
-                    accuracy: winner.accuracy,
-                    rank: winner.rank
-                });
-            }
-
-            // Update ELO for ranked races if both players have userId and both finished
-            if (sorted.length >= 2 && sorted[0].userId && sorted[1].userId) {
-                try {
-                    const p1 = sorted[0];
-                    const p2 = sorted[1];
-
-                    const [user1, user2] = await Promise.all([
-                        User.findById(p1.userId),
-                        User.findById(p2.userId)
-                    ]);
-
-                    if (user1 && user2) {
-                        const r1 = user1.typingStats.rankedRating || 1000;
-                        const r2 = user2.typingStats.rankedRating || 1000;
-
-                        const expected1 = calculateExpectedScore(r1, r2);
-                        const expected2 = calculateExpectedScore(r2, r1);
-
-                        const actual1 = p1.rank === 1 ? 1 : 0;
-                        const actual2 = p2.rank === 1 ? 1 : 0;
-
-                        user1.typingStats.rankedRating = updateELO(r1, expected1, actual1);
-                        user1.typingStats.ratingLastUpdatedAt = new Date();
-
-                        user2.typingStats.rankedRating = updateELO(r2, expected2, actual2);
-                        user2.typingStats.ratingLastUpdatedAt = new Date();
-
-                        await Promise.all([user1.save(), user2.save()]);
-
-                        io.to(roomId).emit('race:ratingUpdated', {
-                            messages: [
-                                `${p1.username}: ${r1} → ${user1.typingStats.rankedRating}`,
-                                `${p2.username}: ${r2} → ${user2.typingStats.rankedRating}`
-                            ]
-                        });
-                    }
-                } catch (error) {
-                    console.error('Error updating ELO ratings:', error);
-                }
-            }
-
-            emitState(io, room);
-        });
-
-        socket.on('race:spectate', ({ roomId, username }) => {
-            if (!roomId || !username) return;
-
-            const room = ensureRoom(roomId, 'public');
-            socket.join(roomId);
-            room.spectators.set(socket.id, { username, joinedAt: Date.now() });
-            emitState(io, room);
-        });
-
-        socket.on('disconnect', () => {
-            const queueIndex = rankedQueue.findIndex((item) => item.socketId === socket.id);
-            if (queueIndex >= 0) {
-                rankedQueue.splice(queueIndex, 1);
-            }
-
-            for (const [roomId, room] of raceRooms.entries()) {
-                const removedPlayer = room.players.delete(socket.id);
-                const removedSpectator = room.spectators.delete(socket.id);
-
-                if (removedPlayer || removedSpectator) {
-                    if (room.players.size > 0 || room.spectators.size > 0) {
-                        emitState(io, room);
-                    }
-                    maybeCleanupRoom(roomId);
-                }
-            }
-        });
+    // Get rooms list
+    socket.on('rooms:get', () => {
+      const publicRooms = getPublicRooms();
+      socket.emit('rooms:list', publicRooms);
     });
-}
 
-module.exports = {
-    setupRaceSocket
+    // Create room
+    socket.on('room:create', (data) => {
+      const { name, password, isPrivate } = data;
+      const user = socket.user; // Assume user is attached to socket
+
+      if (!user) {
+        socket.emit('error', { message: 'Not authenticated' });
+        return;
+      }
+
+      const room = createRoom(name, user, isPrivate, password);
+      socket.join(room.id);
+      socket.emit('room:created', room);
+      io.emit('rooms:list', getPublicRooms()); // Update all clients
+    });
+
+    // Join room
+    socket.on('room:join', (data) => {
+      const { roomId, password } = data;
+      const user = socket.user;
+
+      if (!user) {
+        socket.emit('error', { message: 'Not authenticated' });
+        return;
+      }
+
+      const room = rooms.get(roomId);
+      if (!room) {
+        socket.emit('error', { message: 'Room not found' });
+        return;
+      }
+
+      if (room.isPrivate && room.password !== password) {
+        socket.emit('error', { message: 'Invalid password' });
+        return;
+      }
+
+      if (room.players.size >= room.maxPlayers) {
+        socket.emit('error', { message: 'Room is full' });
+        return;
+      }
+
+      // Add player to room
+      room.players.set(user.id, {
+        id: user.id,
+        username: user.username,
+        ready: false,
+        joinedAt: new Date(),
+        wpm: 0,
+        accuracy: 0,
+        progress: 0,
+        finished: false,
+        finishTime: null
+      });
+
+      socket.join(roomId);
+      socket.emit('room:joined', room);
+
+      // Notify other players
+      socket.to(roomId).emit('room:updated', room);
+    });
+
+    // Leave room
+    socket.on('room:leave', () => {
+      const user = socket.user;
+      if (!user) return;
+
+      // Find room containing this user
+      for (const [roomId, room] of rooms) {
+        if (room.players.has(user.id)) {
+          room.players.delete(user.id);
+
+          // If room is empty, delete it
+          if (room.players.size === 0) {
+            rooms.delete(roomId);
+            io.emit('rooms:list', getPublicRooms());
+          } else {
+            // If host left, assign new host
+            if (room.host.id === user.id) {
+              const remainingPlayers = Array.from(room.players.values());
+              room.host = remainingPlayers[0];
+            }
+
+            socket.to(roomId).emit('room:updated', room);
+          }
+
+          socket.emit('room:left');
+          break;
+        }
+      }
+    });
+
+    // Player ready toggle
+    socket.on('player:ready', (data) => {
+      const { roomId, ready } = data;
+      const user = socket.user;
+
+      if (!user) return;
+
+      const room = rooms.get(roomId);
+      if (!room) return;
+
+      const player = room.players.get(user.id);
+      if (!player) return;
+
+      player.ready = ready;
+      io.to(roomId).emit('room:updated', room);
+    });
+
+    // Start race
+    socket.on('race:start', (data) => {
+      const { roomId } = data;
+      const user = socket.user;
+
+      if (!user) return;
+
+      const room = rooms.get(roomId);
+      if (!room || room.host.id !== user.id) return;
+
+      // Check if all players are ready
+      const allReady = Array.from(room.players.values()).every(p => p.ready);
+      if (!allReady || room.players.size < 2) return;
+
+      startRaceCountdown(io, roomId);
+    });
+
+    // Join race
+    socket.on('race:join', (data) => {
+      const { roomId } = data;
+      const user = socket.user;
+
+      if (!user) return;
+
+      const room = rooms.get(roomId);
+      if (!room) {
+        socket.emit('error', { message: 'Room not found' });
+        return;
+      }
+
+      socket.join(roomId);
+      socket.emit('race:joined', {
+        roomId,
+        text: activeRaces.get(roomId)?.text || '',
+        startTime: room.startTime,
+        players: Array.from(room.players.values())
+      });
+    });
+
+    // Update progress
+    socket.on('race:progress', (data) => {
+      const { roomId, progress, wpm, accuracy } = data;
+      const user = socket.user;
+
+      if (!user) return;
+
+      updatePlayerProgress(roomId, user.id, progress, wpm, accuracy);
+
+      const raceData = activeRaces.get(roomId);
+      if (raceData) {
+        io.to(roomId).emit('race:update', raceData);
+      }
+    });
+
+    socket.on('disconnect', () => {
+      console.log('User disconnected:', socket.id);
+      // Handle disconnection (similar to leave room)
+    });
+  });
 };

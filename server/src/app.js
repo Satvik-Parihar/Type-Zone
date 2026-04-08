@@ -3,6 +3,7 @@ const cors = require('cors');
 const compression = require('compression');
 const cookieParser = require('cookie-parser');
 const morgan = require('morgan');
+const path = require('path');
 const { xss } = require('express-xss-sanitizer');
 const { getCorsOptions } = require('./config/cors');
 const { applySecurityMiddleware } = require('./middleware/security');
@@ -40,6 +41,20 @@ app.use('/api/challenges', challengeRoutes);
 app.use('/api/achievements', achievementRoutes);
 app.use('/api/history', historyRoutes);
 app.use('/api/tournaments', tournamentRoutes);
+
+// Serve static files in production
+if (process.env.NODE_ENV === 'production') {
+    const clientBuildPath = path.resolve(__dirname, '../../client/dist');
+    app.use(express.static(clientBuildPath));
+    
+    // SPA fallback
+    app.get('*', (req, res) => {
+        if (req.path.startsWith('/api')) {
+            return res.status(404).json({ error: 'API route not found' });
+        }
+        res.sendFile(path.join(clientBuildPath, 'index.html'));
+    });
+}
 
 app.use(notFoundHandler);
 app.use(errorHandler);

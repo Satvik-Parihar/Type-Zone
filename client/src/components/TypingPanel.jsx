@@ -1,4 +1,5 @@
 import { memo, useEffect, useMemo, useRef } from 'react';
+import './TypingPanel.css';
 
 function charState(expected, actual, index, inputLength, isFinished) {
   if (index >= expected.length) {
@@ -29,8 +30,9 @@ function TypingPanel({ prompt, inputValue, active, finished }) {
 
       rows.push({
         index,
-        value: value === ' ' ? ' ' : value,
-        state: charState(prompt, actual, index, inputValue.length, finished)
+        value: value === ' ' ? '·' : value,
+        state: charState(prompt, actual, index, inputValue.length, finished),
+        isSpace: value === ' ',
       });
     }
 
@@ -50,22 +52,40 @@ function TypingPanel({ prompt, inputValue, active, finished }) {
   }, [active, inputValue.length]);
 
   if (!prompt) {
-    return <div className="min-h-24 rounded-xl border border-slate-700/50 bg-slate-950/70 p-4 text-lg leading-8 tracking-wide text-slate-300">Press Start to begin.</div>;
+    return (
+      <div className="typing-panel typing-panel-loading">
+        <div className="typing-panel-placeholder">
+          <p>Start a typing test to begin...</p>
+        </div>
+      </div>
+    );
   }
 
   return (
-    <div className="typing-panel min-h-24 overflow-x-auto rounded-xl border border-slate-700/50 bg-slate-950/70 p-4 text-lg leading-8 tracking-wide text-slate-300">
-      <div className="typing-text relative whitespace-pre-wrap break-words">
-        {model.map((item) => {
-          const isCaret = active && item.index === inputValue.length;
-          return (
-            <span key={item.index} className={`typing-char ${item.state}`} ref={isCaret ? activeCharRef : null}>
-              {isCaret && <span className="typing-caret" aria-hidden="true" />}
-              {item.value || ' '}
-            </span>
-          );
-        })}
-        {active && inputValue.length >= prompt.length && <span className="typing-caret" aria-hidden="true" />}
+    <div className={`typing-panel ${active ? 'active' : ''} ${finished ? 'finished' : ''}`}>
+      <div className="typing-panel-content">
+        <div className="typing-text" role="log" aria-live="polite">
+          {model.map((item) => {
+            const isCaret = active && item.index === inputValue.length;
+            const isCorrect = item.state === 'correct';
+            const isIncorrect = item.state === 'incorrect';
+            const isExtra = item.state === 'extra';
+
+            return (
+              <span
+                key={item.index}
+                className={`typing-char typing-char-${item.state} ${isCaret ? 'has-caret' : ''}`}
+                ref={isCaret ? activeCharRef : null}
+                data-state={item.state}
+              >
+                {item.value || ' '}
+              </span>
+            );
+          })}
+          {active && inputValue.length >= prompt.length && (
+            <span className="typing-caret" aria-hidden="true" />
+          )}
+        </div>
       </div>
     </div>
   );

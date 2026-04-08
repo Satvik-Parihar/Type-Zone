@@ -7,7 +7,7 @@
     "test:server": "npm --prefix server run test",
     "test:client": "npm --prefix client run test",
     "start": "npm --prefix server run start",
-    "dev": "concurrently \"npm:dev:server\" \"npm:dev:client\"",
+    "dev": "node dev-start.js",
     "dev:server": "npm --prefix server run dev",
     "dev:client": "npm --prefix client run dev",
     "build": "npm --prefix client run build",

@@ -20,7 +20,7 @@ const submitSchema = z.object({
     wpm: z.number().min(0),
     rawWpm: z.number().min(0).optional().default(0),
     accuracy: z.number().min(0).max(100),
-    errors: z.number().int().min(0),
+    errorCount: z.number().int().min(0),
     consistency: z.number().min(0).max(100).optional().default(100),
     keystrokesPerSecond: z.number().min(0).optional().default(0),
     timeTaken: z.number().int().min(1),

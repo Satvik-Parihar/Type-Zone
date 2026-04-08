@@ -1,0 +1,180 @@
+/**
+ * Input & Textarea Component Styles
+ * Professional form control design
+ */
+
+/* Input wrapper */
+.input-wrapper,
+.textarea-wrapper {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  gap: var(--space-2);
+}
+
+/* Labels */
+.input-label,
+.textarea-label {
+  font-size: var(--text-xs);
+  font-weight: var(--font-semibold);
+  color: var(--color-text);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* Input container */
+.input-container {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+/* Input icon */
+.input-icon {
+  position: absolute;
+  left: var(--space-3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-muted);
+  pointer-events: none;
+  flex-shrink: 0;
+}
+
+/* Base input styling */
+.input,
+.textarea {
+  font-family: var(--font-sans);
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--components-input-radius);
+  color: var(--color-text);
+  font-size: var(--text-sm);
+  transition: all var(--duration-base) var(--easing-ease);
+  width: 100%;
+}
+
+.input::placeholder,
+.textarea::placeholder {
+  color: var(--color-text-muted);
+}
+
+/* Input size variants */
+.input-sm {
+  height: 32px;
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--text-xs);
+}
+
+.input-base {
+  height: 40px;
+  padding: var(--space-3) var(--space-4);
+  font-size: var(--text-sm);
+}
+
+.input-lg {
+  height: 48px;
+  padding: var(--space-4) var(--space-5);
+  font-size: var(--text-base);
+}
+
+/* Input with icon padding */
+.input-with-icon {
+  padding-left: 40px;
+}
+
+/* Input focus state */
+.input:focus,
+.textarea:focus {
+  outline: none;
+  border-color: var(--color-focus);
+  box-shadow: var(--shadow-focus);
+  background-color: var(--color-surface-alt);
+}
+
+/* Input hover state */
+.input:hover:not(:focus):not(:disabled),
+.textarea:hover:not(:focus):not(:disabled) {
+  border-color: var(--color-border-light);
+  background-color: var(--color-surface-hover);
+}
+
+/* Input error state */
+.input-error,
+.textarea-error {
+  border-color: var(--color-error);
+}
+
+.input-error:focus,
+.textarea-error:focus {
+  border-color: var(--color-error);
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.1);
+}
+
+/* Input disabled state */
+.input:disabled,
+.textarea:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  background-color: var(--color-surface);
+}
+
+/* Textarea sizing */
+.textarea {
+  resize: none;
+  padding: var(--space-3) var(--space-4);
+  min-height: 100px;
+  line-height: var(--leading-normal);
+}
+
+.textarea-sm {
+  min-height: 80px;
+}
+
+.textarea-base {
+  min-height: 120px;
+}
+
+.textarea-lg {
+  min-height: 160px;
+}
+
+/* Error messages */
+.input-error-text,
+.textarea-error-text {
+  font-size: var(--text-xs);
+  color: var(--color-error);
+  font-weight: var(--font-medium);
+  margin-top: var(--space-1);
+}
+
+/* Focus visible for keyboard users */
+.input:focus-visible,
+.textarea:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  .input,
+  .textarea {
+    transition: none;
+  }
+}
+
+/* High contrast mode */
+@media (prefers-contrast: more) {
+  .input,
+  .textarea {
+    border-width: 2px;
+  }
+}
+
+/* Mobile adjustments */
+@media (max-width: 425px) {
+  .input,
+  .textarea {
+    font-size: 16px; /* Prevents zoom on iOS */
+  }
+}

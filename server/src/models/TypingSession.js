@@ -28,7 +28,7 @@ const typingSessionSchema = new mongoose.Schema(
             max: 100,
             required: true
         },
-        errors: {
+        errorCount: {
             type: Number,
             min: 0,
             required: true

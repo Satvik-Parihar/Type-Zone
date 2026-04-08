@@ -1,32 +1,22 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
-import LoginPage from './pages/LoginPage';
+import Layout from './layout/Layout';
 import HomePage from './pages/HomePage';
-import { useAuth } from './context/AuthContext';
-
-function ProtectedRoute({ children }) {
-  const { token, loading } = useAuth();
-  if (loading) return null;
-  return token ? children : <Navigate to="/login" replace />;
-}
+import LoginPage from './pages/LoginPage';
+import TypingPage from './pages/TypingPage';
+import MultiplayerPage from './pages/MultiplayerPage';
+import LeaderboardPage from './pages/LeaderboardPage';
+import PracticePage from './pages/PracticePage';
 
 export default function App() {
-  const { token, loading } = useAuth();
-
-  if (loading) {
-    return <div className="min-h-screen bg-slate-950" />;
-  }
-
   return (
     <Routes>
-      <Route path="/login" element={token ? <Navigate to="/" replace /> : <LoginPage />} />
-      <Route
-        path="/"
-        element={
-          <ProtectedRoute>
-            <HomePage />
-          </ProtectedRoute>
-        }
-      />
+      <Route path="/" element={<Layout><HomePage /></Layout>} />
+      <Route path="/typing" element={<Layout><TypingPage /></Layout>} />
+      <Route path="/multiplayer" element={<Layout><MultiplayerPage /></Layout>} />
+      <Route path="/leaderboard" element={<Layout><LeaderboardPage /></Layout>} />
+      <Route path="/practice" element={<Layout><PracticePage /></Layout>} />
+      <Route path="/login" element={<Layout><LoginPage /></Layout>} />
+      <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
 }
