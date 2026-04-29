@@ -3,10 +3,10 @@ import { motion } from 'framer-motion';
 import { useParams, useNavigate } from 'react-router-dom';
 import { RotateCcw, Home } from 'lucide-react';
 import { useTypingEngine } from '../hooks/useTypingEngine';
+import { generatePrompt } from '../utils/typingData';
 import { useSocket } from '../hooks/useSocket';
 import { raceEvents, playerEvents } from '../services/socketService';
 
-const RACE_TEXT = 'the quick brown fox jumps over the lazy dog in the vast expanse of the forest where sunlight filters through ancient trees and birds sing their melodious songs';
 
 const PlayerTrack = ({ player, raceText, isCurrentUser }) => {
   const progress = typeof player.progress === 'number'
@@ -40,7 +40,7 @@ export default function RacePage() {
   const socket = useSocket();
   const [raceStarted, setRaceStarted] = useState(false);
   const [raceFinished, setRaceFinished] = useState(false);
-  const [raceText, setRaceText] = useState('');
+  const [raceText, setRaceText] = useState(() => generatePrompt('quote', 0, 'english'));
   const [players, setPlayers] = useState([]);
   const [countdown, setCountdown] = useState(3);
 
@@ -54,7 +54,7 @@ export default function RacePage() {
     resetTest,
     handleInput,
     inputRef
-  } = useTypingEngine(raceText || RACE_TEXT, 'time', 60);
+  } = useTypingEngine(raceText, 'time', 60);
 
   // Socket event handlers for real-time race updates
   useEffect(() => {
@@ -63,7 +63,7 @@ export default function RacePage() {
     socket.emit(raceEvents.JOIN_RACE, { roomId });
 
     const handleRaceStarted = (data) => {
-      setRaceText(data.text || RACE_TEXT);
+      setRaceText(data.text || generatePrompt('quote', 0, 'english'));
       setRaceStarted(true);
       setCountdown(3);
       setPlayers(Array.isArray(data.players) ? data.players : []);
@@ -107,7 +107,7 @@ export default function RacePage() {
     if (socket && roomId) {
       socket.emit(playerEvents.UPDATE_PROGRESS, {
         roomId,
-        progress: (currentIndex / (raceText || RACE_TEXT).length) * 100,
+        progress: (currentIndex / raceText.length) * 100,
         wpm: metrics.wpm || 0,
         accuracy: metrics.accuracy || 100
       });
@@ -175,7 +175,7 @@ export default function RacePage() {
               <PlayerTrack
                 key={player.id}
                 player={player}
-                raceText={raceText || RACE_TEXT}
+                raceText={raceText}
                 isCurrentUser={idx === 0}
               />
             ))
@@ -213,7 +213,7 @@ export default function RacePage() {
           <div className="card p-8 rounded-2xl">
             <div className="bg-card/50 backdrop-blur-sm p-8 rounded-xl border border-border-dark min-h-[150px] overflow-hidden">
               <div className="font-mono text-xl leading-relaxed text-text-secondary">
-                {(raceText || RACE_TEXT).split('').map((char, idx) => {
+                {raceText.split('').map((char, idx) => {
                   let className = '';
                   if (idx < input.length) {
                     className = input[idx] === char ? 'text-text bg-green-500/20' : 'text-error bg-error/20';

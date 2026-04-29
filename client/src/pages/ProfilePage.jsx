@@ -139,6 +139,27 @@ export default function ProfilePage() {
     return `${minutes}m`;
   };
 
+  const exportCSV = () => {
+    const headers = ['Date','Mode','WPM','Raw WPM','Accuracy','Consistency','Time(s)'];
+    const rows = sessions.map(s => [
+      new Date(s.createdAt).toISOString(),
+      s.mode,
+      Math.round(s.wpm),
+      Math.round(s.rawWpm || 0),
+      Math.round(s.accuracy),
+      Math.round(s.consistency || 100),
+      s.timeTaken
+    ]);
+    const csv = [headers, ...rows].map(r => r.join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `typezone-sessions-${Date.now()}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   const getPlacementLabel = (placement) => {
     if (placement === 1) return '1st place';
     if (placement === 2) return '2nd place';
@@ -200,12 +221,26 @@ export default function ProfilePage() {
       sessions.reduce((sum, session) => sum + (Number(session.accuracy) || 0), 0) / sessions.length
     );
 
+    const modeOrder = ['time', 'words', 'quote', 'code', 'numbers', 'zen'];
+    const personalBests = modeOrder.map(mode => {
+      const modeSessions = sessions.filter(s => s.mode === mode);
+      if (!modeSessions.length) return null;
+      const best = modeSessions.reduce((b, s) => (Number(s.wpm) > Number(b.wpm) ? s : b), modeSessions[0]);
+      return {
+        mode,
+        wpm: Math.round(best.wpm),
+        accuracy: Math.round(best.accuracy),
+        date: new Date(best.createdAt).toLocaleDateString()
+      };
+    }).filter(Boolean);
+
     return {
       recentWpm,
       mergedKeyAccuracy,
       weakKeys,
       bestSession,
-      avgAccuracy
+      avgAccuracy,
+      personalBests
     };
   }, [sessions]);
 
@@ -308,6 +343,34 @@ export default function ProfilePage() {
           <StatCard icon={Award} label="Longest Streak" value={profile.longestStreak} unit="days" />
         </div>
 
+        {analytics.personalBests && analytics.personalBests.length > 0 && (
+          <div className="card p-6 mt-6">
+            <h3 className="text-lg font-semibold text-text mb-4">Personal Bests</h3>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-border text-text-secondary text-left">
+                    <th className="pb-2 font-medium">Mode</th>
+                    <th className="pb-2 font-medium">Best WPM</th>
+                    <th className="pb-2 font-medium">Accuracy</th>
+                    <th className="pb-2 font-medium">Date</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {analytics.personalBests.map(pb => (
+                    <tr key={pb.mode} className="border-b border-border/50 hover:bg-surface/50">
+                      <td className="py-2 capitalize font-mono text-accent">{pb.mode}</td>
+                      <td className="py-2 font-bold text-text">{pb.wpm}</td>
+                      <td className="py-2 text-correct">{pb.accuracy}%</td>
+                      <td className="py-2 text-text-secondary">{pb.date}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
         {analytics.recentWpm.length > 1 && (
           <div className="card p-6 mt-6">
             <h3 className="text-lg font-semibold text-text mb-4">WPM over last 20 sessions</h3>
@@ -363,7 +426,12 @@ export default function ProfilePage() {
     sessions: () => (
       <div className="space-y-4">
         <div className="flex justify-between items-center mb-6">
-          <h3 className="text-lg font-semibold text-text">Recent Tests</h3>
+          <div className="flex items-center gap-3">
+            <h3 className="text-lg font-semibold text-text">Recent Tests</h3>
+            <button onClick={exportCSV} className="btn-ghost text-sm px-3 py-1">
+              Export CSV
+            </button>
+          </div>
           <p className="text-sm text-text-secondary">{sessions.length} tests</p>
         </div>
         

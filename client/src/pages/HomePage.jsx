@@ -107,10 +107,10 @@ export default function HomePage() {
             >.</span>
           </h1>
           <p className="text-xl text-text-secondary max-w-2xl mx-auto mb-8">
-            The next-generation typing platform. Test your speed, track your progress, and compete with the world.
+            real metrics. real progress. real races.
           </p>
           <Link to="/type" className="btn-primary inline-block">
-            Start Typing Now <ArrowRight className="w-4 h-4 ml-2" />
+            Start Typing
           </Link>
         </motion.div>
       </div>

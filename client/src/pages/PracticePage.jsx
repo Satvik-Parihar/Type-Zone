@@ -335,6 +335,10 @@ export default function PracticePage() {
                     showActionButtons={true}
                   />
 
+                  <p className="text-center text-xs text-text-secondary mt-2 opacity-60">
+                    Tab — restart · Esc — stop
+                  </p>
+
                   {selectedDrill.rounds.length > 1 && (
                     <div className="mt-6">
                       <div className="flex justify-between text-sm text-text-secondary mb-2">

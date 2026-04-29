@@ -44,11 +44,15 @@ export default function LobbyPage() {
     // Request rooms list on mount
     socket.emit(roomEvents.GET_ROOMS);
 
+    // Re-request every 5 seconds to keep lobby updated
+    const interval = setInterval(() => socket.emit(roomEvents.GET_ROOMS), 5000);
+
     return () => {
       socket.off(roomEvents.ROOMS_LIST, handleRoomsList);
       socket.off(roomEvents.ERROR, handleError);
       socket.off(roomEvents.ROOM_CREATED, handleRoomCreated);
       socket.off(roomEvents.ROOM_JOINED, handleRoomJoined);
+      clearInterval(interval);
     };
   }, [socket, navigate]);
 

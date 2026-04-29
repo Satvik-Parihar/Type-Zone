@@ -244,16 +244,15 @@ function finishRace(io, roomId) {
       console.error(`Failed to save race sessions for room ${roomId}:`, error.message);
     });
 
-  // Clean up active race data immediately
-  activeRaces.delete(roomId);
-  
-  // Schedule room deletion after 5 minutes (for replay/history purposes)
+  // Schedule cleanup of active race and room after 5 minutes (retain briefly for replay/history)
   const roomCleanupTimeout = setTimeout(() => {
+    activeRaces.delete(roomId);
     rooms.delete(roomId);
-    console.log(`Cleaned up room ${roomId} after 5-minute retention period`);
+    console.log(`Cleaned up active race and room ${roomId} after 5-minute retention period`);
+    io.emit('rooms:list', getPublicRooms());
   }, 5 * 60 * 1000); // 5 minutes
 
-  // Store timeout reference for potential manual cleanup
+  // Store timeout reference for potential manual cleanup (so we can cancel if room reused)
   if (!room.cleanupTimeout) {
     room.cleanupTimeout = roomCleanupTimeout;
   }
@@ -332,6 +331,12 @@ module.exports = (io) => {
         finishTime: null
       });
 
+      // If a cleanup timeout was scheduled because the room was empty, cancel it
+      if (room.cleanupTimeout) {
+        clearTimeout(room.cleanupTimeout);
+        delete room.cleanupTimeout;
+      }
+
       socket.join(roomId);
       socket.emit('room:joined', serializeRoom(room));
 
@@ -350,10 +355,24 @@ module.exports = (io) => {
         if (room.players.has(user.id)) {
           room.players.delete(user.id);
 
-          // If room is empty, delete it
+          // If room is empty, schedule or perform cleanup
           if (room.players.size === 0) {
-            rooms.delete(roomId);
-            io.emit('rooms:list', getPublicRooms());
+            // If waiting, schedule a delayed cleanup in case players reconnect briefly
+            if (room.status === 'waiting') {
+              if (!room.cleanupTimeout) {
+                room.cleanupTimeout = setTimeout(() => {
+                  if (rooms.has(roomId) && rooms.get(roomId).players.size === 0) {
+                    rooms.delete(roomId);
+                    io.emit('rooms:list', getPublicRooms());
+                    console.log(`Cleaned up empty waiting room ${roomId} after 60s`);
+                  }
+                }, 60 * 1000);
+              }
+            } else if (room.status !== 'active' && room.status !== 'starting') {
+              // For non-active rooms (but not 'waiting'), delete immediately
+              rooms.delete(roomId);
+              io.emit('rooms:list', getPublicRooms());
+            }
           } else {
             // If host left, assign new host
             if (room.host.id === user.id) {
