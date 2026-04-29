@@ -145,11 +145,146 @@ async function analytics(req, res) {
     });
 }
 
+async function getGlobalStats(req, res) {
+    try {
+        const User = require('../models/User');
+        
+        // Total sessions
+        const totalSessions = await TypingSession.countDocuments();
+        
+        // Total unique users
+        const totalUsers = await User.countDocuments();
+        
+        // Active users in last 5 minutes
+        const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+        const activeUsers = await TypingSession.distinct('userId', {
+            createdAt: { $gte: fiveMinutesAgo }
+        }).then(ids => ids.length);
+        
+        // Top WPM in last 24 hours
+        const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+        const topWpm24h = await TypingSession.findOne({
+            createdAt: { $gte: oneDayAgo }
+        })
+            .sort({ wpm: -1 })
+            .select('wpm')
+            .lean();
+        
+        // Average WPM across all sessions
+        const avgWpmResult = await TypingSession.aggregate([
+            { $group: { _id: null, avgWpm: { $avg: '$wpm' } } }
+        ]);
+        const avgWpm = avgWpmResult.length > 0 ? Math.round(avgWpmResult[0].avgWpm) : 0;
+        
+        // Return stats only if we have real data, otherwise return zeros
+        res.status(200).json({
+            totalSessions: totalSessions || 0,
+            totalUsers: totalUsers || 0,
+            activeUsers: activeUsers || 0,
+            topWpm24h: topWpm24h?.wpm || 0,
+            avgWpm: avgWpm || 0
+        });
+    } catch (error) {
+        res.status(200).json({
+            totalSessions: 0,
+            totalUsers: 0,
+            activeUsers: 0,
+            topWpm24h: 0,
+            avgWpm: 0
+        });
+    }
+}
+
+async function saveSession(req, res) {
+    const payload = {
+        userId: req.auth.userId,
+        textId: req.body.textId || 'manual',
+        mode: req.body.mode || 'time',
+        wpm: Number(req.body.wpm) || 0,
+        accuracy: Number(req.body.accuracy) || 0,
+        errorCount: Number(req.body.errorCount ?? req.body.errors ?? 0) || 0,
+        rawWpm: Number(req.body.rawWpm) || 0,
+        consistency: Number(req.body.consistency ?? 100) || 100,
+        keystrokesPerSecond: Number(req.body.keystrokesPerSecond) || 0,
+        timeTaken: Math.max(1, Number(req.body.timeTaken ?? req.body.time ?? 1) || 1),
+        rawInput: req.body.rawInput || '',
+        keystrokeTimeline: Array.isArray(req.body.keystrokeTimeline) ? req.body.keystrokeTimeline : [],
+        wpmHistory: Array.isArray(req.body.wpmHistory) ? req.body.wpmHistory.map((v) => Number(v) || 0) : [],
+        keyAccuracy: req.body.keyAccuracy && typeof req.body.keyAccuracy === 'object' ? req.body.keyAccuracy : {}
+    };
+
+    const created = await TypingSession.create(payload);
+    res.status(201).json({ id: created._id });
+}
+
+async function getSessions(req, res) {
+    const page = Math.max(1, Number(req.query.page) || 1);
+    const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 20));
+    const skip = (page - 1) * limit;
+
+    const [sessions, total] = await Promise.all([
+        TypingSession.find({ userId: req.auth.userId })
+            .sort({ createdAt: -1 })
+            .skip(skip)
+            .limit(limit)
+            .lean(),
+        TypingSession.countDocuments({ userId: req.auth.userId })
+    ]);
+
+    res.status(200).json({
+        sessions,
+        pagination: {
+            page,
+            limit,
+            total,
+            pages: Math.ceil(total / limit)
+        }
+    });
+}
+
+async function getProfileStats(req, res) {
+    const sessions = await TypingSession.find({ userId: req.auth.userId })
+        .sort({ createdAt: -1 })
+        .lean();
+
+    if (sessions.length === 0) {
+        return res.status(200).json({
+            bestWpm: 0,
+            avgWpm: 0,
+            totalTests: 0,
+            totalTimeMs: 0,
+            currentStreak: 0,
+            longestStreak: 0,
+            achievements: []
+        });
+    }
+
+    const bestWpm = sessions.reduce((best, session) => Math.max(best, Number(session.wpm) || 0), 0);
+    const avgWpm = Math.round(
+        sessions.reduce((sum, session) => sum + (Number(session.wpm) || 0), 0) / sessions.length
+    );
+    const totalTimeMs = sessions.reduce((sum, session) => sum + (Number(session.timeTaken) || 0) * 1000, 0);
+
+    res.status(200).json({
+        bestWpm,
+        avgWpm,
+        totalTests: sessions.length,
+        totalTimeMs,
+        currentStreak: 0,
+        longestStreak: 0,
+        achievements: []
+    });
+}
+
 module.exports = {
     start,
     submit,
     history,
     analytics,
+    getGlobalStats,
+    saveSession,
+    getSessions,
+    getProfileStats,
     startSchema,
     submitSchema
 };

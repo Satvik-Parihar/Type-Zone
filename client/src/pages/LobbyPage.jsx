@@ -1,260 +1,292 @@
 import { useState, useEffect } from 'react';
+import { motion } from 'framer-motion';
+import { Plus, Play, Users, Clock, Lock, AlertCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { io } from 'socket.io-client';
-import { Button } from '../ui/Button';
-import { Input } from '../ui/Input';
-import { Card } from '../ui/Card';
-import { Badge } from '../ui/Badge';
-import Navbar from '../layout/Navbar';
-import Footer from '../components/Footer';
-import { Users, Plus, Lock, Unlock, Crown, Clock, Play } from 'lucide-react';
-import { useAuth } from '../context/AuthContext';
-
-const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:5000';
+import { useSocket } from '../hooks/useSocket';
+import { roomEvents } from '../services/socketService';
 
 export default function LobbyPage() {
-  const { user } = useAuth();
-  const navigate = useNavigate();
-  const [socket, setSocket] = useState(null);
   const [rooms, setRooms] = useState([]);
-  const [showCreateRoom, setShowCreateRoom] = useState(false);
-  const [roomName, setRoomName] = useState('');
-  const [roomPassword, setRoomPassword] = useState('');
-  const [isPrivate, setIsPrivate] = useState(false);
-  const [joinCode, setJoinCode] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [newRoom, setNewRoom] = useState({ name: '', isPrivate: false, password: '' });
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const navigate = useNavigate();
+  const socket = useSocket();
 
   useEffect(() => {
-    const newSocket = io(SOCKET_URL);
-    setSocket(newSocket);
+    if (!socket) return;
 
-    newSocket.on('rooms:list', (roomsList) => {
+    const handleRoomsList = (roomsList) => {
       setRooms(roomsList);
-    });
-
-    newSocket.on('room:created', (room) => {
-      navigate(`/room/${room.id}`);
-    });
-
-    newSocket.on('room:joined', (room) => {
-      navigate(`/room/${room.id}`);
-    });
-
-    newSocket.on('error', (error) => {
-      setError(error.message);
       setLoading(false);
-    });
+    };
 
-    // Request initial rooms list
-    newSocket.emit('rooms:get');
+    const handleError = (errorData) => {
+      setError(errorData.message);
+    };
+
+    const handleRoomCreated = (room) => {
+      setError(null);
+      navigate(`/multiplayer/room/${room.id}`);
+    };
+
+    const handleRoomJoined = (room) => {
+      setError(null);
+      navigate(`/multiplayer/room/${room.id}`);
+    };
+
+    socket.on(roomEvents.ROOMS_LIST, handleRoomsList);
+    socket.on(roomEvents.ERROR, handleError);
+    socket.on(roomEvents.ROOM_CREATED, handleRoomCreated);
+    socket.on(roomEvents.ROOM_JOINED, handleRoomJoined);
+
+    // Request rooms list on mount
+    socket.emit(roomEvents.GET_ROOMS);
 
     return () => {
-      newSocket.disconnect();
+      socket.off(roomEvents.ROOMS_LIST, handleRoomsList);
+      socket.off(roomEvents.ERROR, handleError);
+      socket.off(roomEvents.ROOM_CREATED, handleRoomCreated);
+      socket.off(roomEvents.ROOM_JOINED, handleRoomJoined);
     };
-  }, [navigate]);
+  }, [socket, navigate]);
 
   const handleCreateRoom = () => {
-    if (!roomName.trim()) return;
+    if (!newRoom.name.trim()) {
+      setError('Room name is required');
+      return;
+    }
 
-    setLoading(true);
-    socket.emit('room:create', {
-      name: roomName.trim(),
-      password: isPrivate ? roomPassword : null,
-      isPrivate
-    });
+    if (socket) {
+      socket.emit(roomEvents.CREATE_ROOM, {
+        name: newRoom.name.trim(),
+        isPrivate: newRoom.isPrivate,
+        password: newRoom.isPrivate ? newRoom.password : null
+      });
+
+      setNewRoom({ name: '', isPrivate: false, password: '' });
+      setShowCreateModal(false);
+      setError(null);
+    }
   };
 
-  const handleJoinRoom = (roomId, password = null) => {
-    setLoading(true);
-    socket.emit('room:join', { roomId, password });
-  };
+  const handleJoinRoom = (roomId, isPrivate = false) => {
+    if (socket) {
+      let password = null;
+      if (isPrivate) {
+        password = prompt('Enter room password:');
+        if (!password) return;
+      }
 
-  const handleJoinByCode = () => {
-    if (!joinCode.trim()) return;
-    setLoading(true);
-    socket.emit('room:join', { roomId: joinCode.trim() });
-  };
-
-  const formatTime = (dateStr) => {
-    const date = new Date(dateStr);
-    return date.toLocaleTimeString('en-US', {
-      hour: '2-digit',
-      minute: '2-digit'
-    });
+      socket.emit(roomEvents.JOIN_ROOM, { roomId, password });
+    }
   };
 
   return (
-    <div style={{ minHeight: '100vh', backgroundColor: '#0B1220', display: 'flex', flexDirection: 'column' }}>
-      <Navbar />
-
-      <main style={{ flex: 1, padding: '32px 16px' }}>
+    <div className="min-h-screen bg-background pt-24 pb-12">
+      <div className="max-w-6xl mx-auto px-4">
         {/* Header */}
-        <div style={{ maxWidth: '1280px', margin: '0 auto', marginBottom: '48px' }}>
-          <div style={{ marginBottom: '12px' }}>
-            <small style={{ color: '#94A3B8', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-              Multiplayer
-            </small>
+        <div className="mb-12 flex justify-between items-start">
+          <div>
+            <h1 className="text-5xl font-bold text-text mb-2">Multiplayer</h1>
+            <p className="text-text-secondary">Race against friends and the world</p>
           </div>
-          <h1 style={{ fontSize: '40px', fontWeight: 700, color: '#E2E8F0', marginBottom: '8px' }}>
-            Race with Others
-          </h1>
-          <p style={{ fontSize: '16px', color: '#94A3B8', maxWidth: '600px' }}>
-            Join a room or create your own to compete in real-time typing races
-          </p>
+          <button
+            onClick={() => setShowCreateModal(true)}
+            className="btn-primary flex items-center gap-2"
+          >
+            <Plus className="w-4 h-4" />
+            Create Room
+          </button>
         </div>
 
-        {/* Main Content - 2 Column Layout */}
-        <div style={{ maxWidth: '1280px', margin: '0 auto', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
-          {/* Left: Create Room */}
-          <div>
-            <div style={{ marginBottom: '16px' }}>
-              <h2 style={{ fontSize: '20px', fontWeight: 600, color: '#E2E8F0' }}>Create Room</h2>
+        {/* Error Alert */}
+        {error && (
+          <div className="mb-8 p-4 bg-red-500/20 border border-red-500/30 rounded-lg flex items-center gap-3">
+            <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0" />
+            <div>
+              <p className="text-red-400">{error}</p>
             </div>
-            
-            <Card className="p-6">
-              {!showCreateRoom ? (
-                <Button onClick={() => setShowCreateRoom(true)} style={{ width: '100%', backgroundColor: '#2563EB', color: 'white', height: '40px', border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '14px', fontWeight: 500 }}>
-                  <Plus style={{ width: '16px', height: '16px', marginRight: '8px', display: 'inline' }} />
-                  Create New Room
-                </Button>
-              ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                  <Input
-                    placeholder="Room name"
-                    value={roomName}
-                    onChange={(e) => setRoomName(e.target.value)}
-                    style={{ height: '40px', padding: '12px 16px', borderRadius: '8px', border: '1px solid #1E293B', backgroundColor: '#0F172A', color: '#E2E8F0' }}
-                  />
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', color: '#E2E8F0' }}>
-                    <input
-                      type="checkbox"
-                      checked={isPrivate}
-                      onChange={(e) => setIsPrivate(e.target.checked)}
-                      style={{ cursor: 'pointer' }}
-                    />
-                    Private room
-                  </label>
-                  {isPrivate && (
-                    <Input
-                      type="password"
-                      placeholder="Room password"
-                      value={roomPassword}
-                      onChange={(e) => setRoomPassword(e.target.value)}
-                      style={{ height: '40px', padding: '12px 16px', borderRadius: '8px', border: '1px solid #1E293B', backgroundColor: '#0F172A', color: '#E2E8F0' }}
-                    />
-                  )}
-                  <div style={{ display: 'flex', gap: '8px' }}>
-                    <Button
-                      onClick={handleCreateRoom}
-                      disabled={!roomName.trim()}
-                      style={{ flex: 1, backgroundColor: '#2563EB', color: 'white', height: '40px', border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '14px', fontWeight: 500 }}
-                    >
-                      Create
-                    </Button>
-                    <Button
-                      onClick={() => setShowCreateRoom(false)}
-                      style={{ flex: 1, backgroundColor: '#1E293B', color: '#E2E8F0', height: '40px', border: '1px solid #1E293B', borderRadius: '8px', cursor: 'pointer', fontSize: '14px', fontWeight: 500 }}
-                    >
-                      Cancel
-                    </Button>
+            <button
+              onClick={() => setError(null)}
+              className="ml-auto text-red-400 hover:text-red-300"
+            >
+              ✕
+            </button>
+          </div>
+        )}
+
+        {/* Quick Match */}
+        <div className="mb-12">
+          <h2 className="text-2xl font-bold text-text mb-4">Quick Actions</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <motion.button
+              whileHover={{ scale: 1.02 }}
+              onClick={() => navigate('/multiplayer/race/quick')}
+              className="card p-8 text-left hover:border-accent transition-colors"
+            >
+              <Play className="w-8 h-8 text-accent mb-4" />
+              <h3 className="text-xl font-semibold text-text mb-2">Quick Match</h3>
+              <p className="text-text-secondary">Jump into a random race with other players</p>
+            </motion.button>
+
+            <motion.button
+              whileHover={{ scale: 1.02 }}
+              className="card p-8 text-left hover:border-accent transition-colors opacity-50 cursor-not-allowed"
+            >
+              <Lock className="w-8 h-8 text-text-secondary mb-4" />
+              <h3 className="text-xl font-semibold text-text mb-2">Tournament</h3>
+              <p className="text-text-secondary">Coming soon</p>
+            </motion.button>
+          </div>
+        </div>
+
+        {/* Active Rooms */}
+        <div>
+          <h2 className="text-2xl font-bold text-text mb-4">
+            Active Rooms {!loading && `(${rooms.length})`}
+          </h2>
+          
+          {loading ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {[...Array(3)].map((_, idx) => (
+                <div key={idx} className="card p-6 animate-pulse">
+                  <div className="h-6 bg-surface rounded mb-4 w-3/4" />
+                  <div className="space-y-2 mb-4">
+                    <div className="h-4 bg-surface rounded w-1/2" />
+                    <div className="h-4 bg-surface rounded w-1/2" />
                   </div>
+                  <div className="h-10 bg-surface rounded" />
                 </div>
-              )}
-            </Card>
-          </div>
-
-          {/* Right: Join by Code */}
-          <div>
-            <div style={{ marginBottom: '16px' }}>
-              <h2 style={{ fontSize: '20px', fontWeight: 600, color: '#E2E8F0' }}>Join by Code</h2>
+              ))}
             </div>
-            
-            <Card className="p-6">
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                <Input
-                  placeholder="Enter room code"
-                  value={joinCode}
-                  onChange={(e) => setJoinCode(e.target.value)}
-                  style={{ height: '40px', padding: '12px 16px', borderRadius: '8px', border: '1px solid #1E293B', backgroundColor: '#0F172A', color: '#E2E8F0' }}
-                />
-                <Button
-                  onClick={handleJoinByCode}
-                  disabled={!joinCode.trim()}
-                  style={{ width: '100%', backgroundColor: '#2563EB', color: 'white', height: '40px', border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '14px', fontWeight: 500 }}
-                >
-                  Join Room
-                </Button>
-              </div>
-            </Card>
-          </div>
-        </div>
-
-        {/* Available Rooms */}
-        <div style={{ maxWidth: '1280px', margin: '0 auto', marginTop: '64px' }}>
-          <div style={{ marginBottom: '24px' }}>
-            <h2 style={{ fontSize: '20px', fontWeight: 600, color: '#E2E8F0', marginBottom: '8px' }}>
-              Available Rooms {rooms.length > 0 && `(${rooms.length})`}
-            </h2>
-          </div>
-
-          {error && (
-            <div style={{ marginBottom: '16px', padding: '12px 16px', backgroundColor: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.2)', borderRadius: '8px' }}>
-              <p style={{ color: '#EF4444', fontSize: '14px' }}>{error}</p>
+          ) : rooms.length === 0 ? (
+            <div className="card p-12 text-center">
+              <Users className="w-12 h-12 text-text-secondary mx-auto mb-4 opacity-50" />
+              <p className="text-text-secondary">No active rooms. Create one to get started!</p>
             </div>
-          )}
-
-          {rooms.length === 0 ? (
-            <Card className="p-8" style={{ textAlign: 'center' }}>
-              <Users style={{ width: '40px', height: '40px', color: '#94A3B8', margin: '0 auto 16px' }} />
-              <h3 style={{ fontSize: '16px', fontWeight: 600, color: '#E2E8F0', marginBottom: '8px' }}>No rooms available</h3>
-              <p style={{ fontSize: '14px', color: '#94A3B8' }}>Create one to get started!</p>
-            </Card>
           ) : (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '16px' }}>
-              {rooms.map((room) => (
-                <Card key={room.id} className="p-4" style={{ border: '1px solid #1E293B', backgroundColor: '#0F172A' }}>
-                  <div style={{ marginBottom: '12px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-                      <h3 style={{ fontSize: '16px', fontWeight: 600, color: '#E2E8F0' }}>{room.name}</h3>
-                      <Badge variant={room.isPrivate ? 'secondary' : 'primary'} size="sm">
-                        {room.isPrivate ? 'Private' : 'Public'}
-                      </Badge>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {rooms.map((room, idx) => (
+                <motion.div
+                  key={room.id}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: idx * 0.05 }}
+                  className="card p-6 hover:border-accent transition-colors"
+                >
+                  <div className="mb-4">
+                    <h3 className="text-lg font-semibold text-text">{room.name}</h3>
+                    {room.isPrivate && (
+                      <div className="flex items-center gap-2 mt-2 text-xs text-text-secondary">
+                        <Lock className="w-3 h-3" />
+                        Private
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="space-y-2 mb-6 text-text-secondary text-sm">
+                    <div className="flex items-center gap-2">
+                      <Users className="w-4 h-4" />
+                      {room.players.length}/{room.maxPlayers} players
                     </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', fontSize: '14px', color: '#94A3B8' }}>
-                      <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                        <Users style={{ width: '16px', height: '16px' }} />
-                        {room.players?.length || 0}/{room.maxPlayers || 8}
-                      </span>
-                      <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                        <Clock style={{ width: '16px', height: '16px' }} />
-                        {formatTime(room.createdAt)}
-                      </span>
+                    <div className="flex items-center gap-2">
+                      <span>Created {new Date(room.createdAt).toLocaleTimeString()}</span>
                     </div>
                   </div>
 
-                  {room.host && (
-                    <div style={{ marginBottom: '12px', paddingBottom: '12px', borderBottom: '1px solid #1E293B', fontSize: '14px', color: '#94A3B8', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                      <Crown style={{ width: '16px', height: '16px', color: '#FBBF24' }} />
-                      {room.host.username}
-                    </div>
-                  )}
+                  <div className="w-full bg-surface rounded h-2 mb-4">
+                    <div
+                      className="bg-accent h-full rounded transition-all"
+                      style={{ width: `${(room.players.length / room.maxPlayers) * 100}%` }}
+                    />
+                  </div>
 
-                  <Button
-                    onClick={() => handleJoinRoom(room.id)}
-                    disabled={(room.players?.length || 0) >= (room.maxPlayers || 8)}
-                    style={{ width: '100%', backgroundColor: '#2563EB', color: 'white', height: '36px', border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '14px', fontWeight: 500 }}
+                  <button
+                    onClick={() => handleJoinRoom(room.id, room.isPrivate)}
+                    disabled={room.players.length >= room.maxPlayers}
+                    className="btn-primary w-full disabled:opacity-50"
                   >
-                    <Play style={{ width: '14px', height: '14px', marginRight: '6px', display: 'inline' }} /> Join
-                  </Button>
-                </Card>
+                    {room.players.length >= room.maxPlayers ? 'Room Full' : 'Join'}
+                  </button>
+                </motion.div>
               ))}
             </div>
           )}
         </div>
-      </main>
+      </div>
 
-      <Footer />
+      {/* Create Room Modal */}
+      {showCreateModal && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          onClick={() => setShowCreateModal(false)}
+          className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+        >
+          <motion.div
+            initial={{ scale: 0.9 }}
+            animate={{ scale: 1 }}
+            onClick={(e) => e.stopPropagation()}
+            className="glass-panel p-8 rounded-2xl max-w-md w-full"
+          >
+            <h2 className="text-2xl font-bold text-text mb-6">Create Room</h2>
+
+            <div className="space-y-4 mb-6">
+              <div>
+                <label className="block text-text-secondary text-sm mb-2">Room Name</label>
+                <input
+                  type="text"
+                  value={newRoom.name}
+                  onChange={(e) => setNewRoom({ ...newRoom, name: e.target.value })}
+                  placeholder="e.g., My Speed Challenge"
+                  className="input-field w-full"
+                />
+              </div>
+
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={newRoom.isPrivate}
+                  onChange={(e) => setNewRoom({ ...newRoom, isPrivate: e.target.checked })}
+                  className="rounded"
+                />
+                <span className="text-text-secondary">Make this room private</span>
+              </label>
+
+              {newRoom.isPrivate && (
+                <div>
+                  <label className="block text-text-secondary text-sm mb-2">Password</label>
+                  <input
+                    type="password"
+                    value={newRoom.password}
+                    onChange={(e) => setNewRoom({ ...newRoom, password: e.target.value })}
+                    placeholder="Enter password"
+                    className="input-field w-full"
+                  />
+                </div>
+              )}
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowCreateModal(false)}
+                className="btn-secondary flex-1"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleCreateRoom}
+                disabled={!newRoom.name.trim()}
+                className="btn-primary flex-1 disabled:opacity-50"
+              >
+                Create
+              </button>
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
     </div>
   );
 }

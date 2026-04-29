@@ -1,324 +1,294 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
-import { io } from 'socket.io-client';
-import { Button } from '../ui/Button';
-import { Card } from '../ui/Card';
-import { Badge } from '../ui/Badge';
-import Navbar from '../layout/Navbar';
-import Footer from '../components/Footer';
-import { Users, Crown, Play, LogOut, CheckCircle, Circle, Copy, Share } from 'lucide-react';
+import { motion } from 'framer-motion';
+import { useParams, useNavigate } from 'react-router-dom';
+import { Play, Users, Check, AlertCircle, LogOut } from 'lucide-react';
+import { useSocket } from '../hooks/useSocket';
 import { useAuth } from '../context/AuthContext';
-
-const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:5000';
+import { roomEvents, playerEvents, raceEvents } from '../services/socketService';
 
 export default function RoomPage() {
   const { roomId } = useParams();
-  const { user } = useAuth();
   const navigate = useNavigate();
-  const [socket, setSocket] = useState(null);
+  const socket = useSocket();
+  const { user } = useAuth();
+
   const [room, setRoom] = useState(null);
-  const [isReady, setIsReady] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [countdown, setCountdown] = useState(null);
-  const [raceStarted, setRaceStarted] = useState(false);
+  const [error, setError] = useState(null);
+  const [isReady, setIsReady] = useState(false);
+  const [countdownStarted, setCountdownStarted] = useState(false);
+  const [countdown, setCountdown] = useState(3);
 
   useEffect(() => {
-    const newSocket = io(SOCKET_URL);
-    setSocket(newSocket);
+    if (!socket || !roomId) return;
 
-    newSocket.on('room:joined', (roomData) => {
-      setRoom(roomData);
+    const handleRoomJoined = (joinedRoom) => {
+      setRoom(joinedRoom);
       setLoading(false);
-      setError('');
-    });
+      setError(null);
+    };
 
-    newSocket.on('room:updated', (roomData) => {
-      setRoom(roomData);
-    });
+    const handleRoomUpdated = (updatedRoom) => {
+      setRoom(updatedRoom);
+    };
 
-    newSocket.on('room:left', () => {
-      navigate('/lobby');
-    });
+    const handleRoomLeft = () => {
+      navigate('/multiplayer');
+    };
 
-    newSocket.on('race:starting', (count) => {
-      setCountdown(count);
-      if (count === 0) {
-        setTimeout(() => {
-          setRaceStarted(true);
-          navigate(`/race/${roomId}`);
-        }, 1000);
+    const handleError = (errorData) => {
+      setError(errorData.message);
+      if (errorData.message.includes('Room not found')) {
+        setTimeout(() => navigate('/multiplayer'), 2000);
       }
-    });
+    };
 
-    newSocket.on('error', (error) => {
-      setError(error.message);
-      setLoading(false);
-    });
+    const handleRaceCountdown = (count) => {
+      setCountdownStarted(true);
+      setCountdown(count);
+    };
 
-    // Join the room
-    newSocket.emit('room:join', { roomId });
+    const handleRaceStarted = () => {
+      navigate(`/multiplayer/race/${roomId}`);
+    };
+
+    socket.on(roomEvents.ROOM_JOINED, handleRoomJoined);
+    socket.on(roomEvents.ROOM_UPDATED, handleRoomUpdated);
+    socket.on(roomEvents.ROOM_LEFT, handleRoomLeft);
+    socket.on(roomEvents.ERROR, handleError);
+    socket.on(raceEvents.RACE_COUNTDOWN, handleRaceCountdown);
+    socket.on(raceEvents.RACE_STARTED, handleRaceStarted);
+
+    // Join room
+    socket.emit(roomEvents.JOIN_ROOM, { roomId, password: null });
 
     return () => {
-      newSocket.disconnect();
+      socket.off(roomEvents.ROOM_JOINED, handleRoomJoined);
+      socket.off(roomEvents.ROOM_UPDATED, handleRoomUpdated);
+      socket.off(roomEvents.ROOM_LEFT, handleRoomLeft);
+      socket.off(roomEvents.ERROR, handleError);
+      socket.off(raceEvents.RACE_COUNTDOWN, handleRaceCountdown);
+      socket.off(raceEvents.RACE_STARTED, handleRaceStarted);
     };
-  }, [roomId, navigate]);
+  }, [socket, roomId, navigate]);
 
-  const handleReadyToggle = () => {
-    const newReadyState = !isReady;
-    setIsReady(newReadyState);
-    socket.emit('player:ready', { roomId, ready: newReadyState });
-  };
-
-  const handleStartRace = () => {
-    if (room && user?.id === room.host.id) {
-      socket.emit('race:start', { roomId });
+  const handleReady = () => {
+    if (socket) {
+      const newReadyState = !isReady;
+      setIsReady(newReadyState);
+      socket.emit(playerEvents.READY, { roomId, ready: newReadyState });
     }
   };
 
   const handleLeaveRoom = () => {
-    socket.emit('room:leave');
+    if (socket) {
+      socket.emit(roomEvents.LEAVE_ROOM);
+    }
   };
 
-  const copyRoomCode = () => {
-    navigator.clipboard.writeText(roomId);
-    // Could add a toast notification here
-  };
-
-  const shareRoom = () => {
-    if (navigator.share) {
-      navigator.share({
-        title: `Join ${room?.name} on TypeZone`,
-        text: `Join my typing race room: ${room?.name}`,
-        url: `${window.location.origin}/lobby?join=${roomId}`
-      });
-    } else {
-      copyRoomCode();
+  const handleStartRace = () => {
+    if (socket && room && room.host.id === user?.id) {
+      const allReady = room.players.every(p => p.ready);
+      if (allReady && room.players.length >= 2) {
+        socket.emit(raceEvents.START_RACE, { roomId });
+      }
     }
   };
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center" style={{ background: 'var(--color-bg)' }}>
+      <div className="min-h-screen bg-background pt-24 pb-12 flex items-center justify-center">
         <div className="text-center">
-          <div className="w-16 h-16 border-4 border-[var(--color-accent)] border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-[var(--color-text)]">Joining room...</p>
+          <div className="w-12 h-12 rounded-full border-4 border-surface border-t-accent animate-spin mx-auto mb-4" />
+          <p className="text-text-secondary">Joining room...</p>
         </div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="min-h-screen flex items-center justify-center" style={{ background: 'var(--color-bg)' }}>
-        <Card className="p-8 text-center max-w-md">
-          <h2 className="text-xl font-semibold text-red-400 mb-4">Error</h2>
-          <p className="text-[var(--color-muted)] mb-6">{error}</p>
-          <Button onClick={() => navigate('/lobby')}>Back to Lobby</Button>
-        </Card>
       </div>
     );
   }
 
   if (!room) {
     return (
-      <div className="min-h-screen flex items-center justify-center" style={{ background: 'var(--color-bg)' }}>
-        <Card className="p-8 text-center">
-          <h2 className="text-xl font-semibold text-[var(--color-text)] mb-4">Room not found</h2>
-          <Button onClick={() => navigate('/lobby')}>Back to Lobby</Button>
-        </Card>
+      <div className="min-h-screen bg-background pt-24 pb-12 flex items-center justify-center">
+        <div className="text-center">
+          <AlertCircle className="w-12 h-12 text-red-400 mx-auto mb-4" />
+          <p className="text-text-secondary">{error || 'Room not found'}</p>
+          <button onClick={() => navigate('/multiplayer')} className="btn-primary mt-4">
+            Back to Lobby
+          </button>
+        </div>
       </div>
     );
   }
 
-  const currentPlayer = room.players.find(p => p.id === user?.id);
-  const isHost = user?.id === room.host.id;
-  const canStartRace = isHost && room.players.length >= 2 && room.players.every(p => p.ready);
-  const allPlayersReady = room.players.every(p => p.ready);
+  const allReady = room.players.every(p => p.ready);
+  const isHost = room.host.id === user?.id;
 
   return (
-    <div className="min-h-screen" style={{ background: 'var(--color-bg)' }}>
-      <Navbar />
-
-      {/* Countdown Overlay */}
-      {countdown !== null && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center">
-          <div className="text-center">
-            <div className="text-8xl font-black text-white mb-4 animate-pulse">
+    <div className="min-h-screen bg-background pt-24 pb-12">
+      <div className="max-w-4xl mx-auto px-4">
+        {/* Countdown Overlay */}
+        {countdownStarted && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50"
+          >
+            <motion.div
+              key={countdown}
+              initial={{ scale: 2, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.5, opacity: 0 }}
+              className="text-9xl font-bold text-accent"
+            >
               {countdown === 0 ? 'GO!' : countdown}
+            </motion.div>
+          </motion.div>
+        )}
+
+        {/* Room Header */}
+        <div className="mb-12">
+          <div className="flex justify-between items-start mb-4">
+            <div>
+              <h1 className="text-5xl font-bold text-text mb-2">{room.name}</h1>
+              <p className="text-text-secondary">
+                {allReady && room.players.length >= 2
+                  ? 'All players ready - Game starts soon!'
+                  : 'Waiting for players to get ready...'}
+              </p>
             </div>
-            <p className="text-white/80 text-lg">Race starting...</p>
+            <button
+              onClick={handleLeaveRoom}
+              className="btn-secondary flex items-center gap-2"
+            >
+              <LogOut className="w-4 h-4" />
+              Leave
+            </button>
           </div>
         </div>
-      )}
 
-      <main className="container mx-auto px-4 py-8">
-        <div className="max-w-4xl mx-auto">
-          {/* Room Header */}
-          <Card className="p-6 mb-6">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center">
-                  <Users className="w-6 h-6 text-white" />
-                </div>
-                <div>
-                  <h1 className="text-2xl font-bold text-[var(--color-text)]">{room.name}</h1>
-                  <p className="text-[var(--color-muted)]">
-                    {room.players.length} / {room.maxPlayers || 8} players
-                  </p>
-                </div>
-              </div>
+        {error && (
+          <div className="mb-8 p-4 bg-red-500/20 border border-red-500/30 rounded-lg flex items-center gap-3">
+            <AlertCircle className="w-5 h-5 text-red-400" />
+            <p className="text-red-400">{error}</p>
+          </div>
+        )}
 
-              <div className="flex items-center gap-2">
-                {room.isPrivate && <Badge variant="secondary">Private</Badge>}
-                <Button variant="secondary" size="sm" onClick={copyRoomCode}>
-                  <Copy className="w-4 h-4 mr-2" />
-                  Code: {roomId.slice(0, 8)}...
-                </Button>
-                <Button variant="secondary" size="sm" onClick={shareRoom}>
-                  <Share className="w-4 h-4 mr-2" />
-                  Share
-                </Button>
-              </div>
-            </div>
-
-            {/* Room Actions */}
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                {!raceStarted && (
-                  <Button
-                    onClick={handleReadyToggle}
-                    variant={currentPlayer?.ready ? "primary" : "secondary"}
-                    className="flex items-center gap-2"
-                  >
-                    {currentPlayer?.ready ? (
-                      <>
-                        <CheckCircle className="w-4 h-4" />
-                        Ready
-                      </>
-                    ) : (
-                      <>
-                        <Circle className="w-4 h-4" />
-                        Not Ready
-                      </>
-                    )}
-                  </Button>
-                )}
-
-                {isHost && !raceStarted && (
-                  <Button
-                    onClick={handleStartRace}
-                    disabled={!canStartRace}
-                    className="flex items-center gap-2"
-                  >
-                    <Play className="w-4 h-4" />
-                    Start Race
-                  </Button>
-                )}
-              </div>
-
-              <Button variant="secondary" onClick={handleLeaveRoom}>
-                <LogOut className="w-4 h-4 mr-2" />
-                Leave Room
-              </Button>
-            </div>
-          </Card>
-
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Players List */}
-          <Card className="p-6">
-            <h2 className="text-xl font-semibold text-[var(--color-text)] mb-6 flex items-center gap-2">
-              <Users className="w-5 h-5" />
-              Players ({room.players.length})
-            </h2>
-
-            <div className="grid gap-4">
-              {room.players.map((player) => {
-                const isCurrentUser = player.id === user?.id;
-                const isRoomHost = player.id === room.host.id;
-
+          <div className="lg:col-span-2">
+            <h2 className="text-2xl font-bold text-text mb-6">Players ({room.players.length})</h2>
+            <div className="space-y-4">
+              {room.players.map((player, idx) => {
+                const isCurrentPlayer = player.id === user?.id;
                 return (
-                  <div
+                  <motion.div
                     key={player.id}
-                    className={`p-4 rounded-lg border transition-all ${
-                      isCurrentUser
-                        ? 'border-[var(--color-accent)] bg-[var(--color-accent)]/5'
-                        : 'border-[var(--color-border)] bg-[var(--color-bg)]'
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: idx * 0.1 }}
+                    className={`card p-6 flex items-center justify-between ${
+                      isCurrentPlayer ? 'border-accent border-2' : ''
                     }`}
                   >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-4">
-                        <div className={`w-12 h-12 rounded-full flex items-center justify-center text-white font-semibold text-lg ${
-                          isCurrentUser
-                            ? 'bg-gradient-to-br from-cyan-500 to-blue-600'
-                            : 'bg-gradient-to-br from-gray-500 to-gray-600'
-                        }`}>
-                          {player.username.charAt(0).toUpperCase()}
-                        </div>
-
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <span className={`font-semibold ${isCurrentUser ? 'text-[var(--color-accent)]' : 'text-[var(--color-text)]'}`}>
-                              {player.username}
-                            </span>
-                            {isCurrentUser && <Badge variant="primary" size="sm">You</Badge>}
-                            {isRoomHost && (
-                              <Badge variant="secondary" className="flex items-center gap-1">
-                                <Crown className="w-3 h-3" />
-                                Host
-                              </Badge>
-                            )}
-                          </div>
-                          <p className="text-sm text-[var(--color-muted)]">
-                            Joined {new Date(player.joinedAt).toLocaleTimeString()}
-                          </p>
-                        </div>
+                    <div className="flex items-center gap-4 flex-1">
+                      <div className="w-12 h-12 rounded-full bg-accent/20 flex items-center justify-center text-accent font-bold">
+                        {player.username[0].toUpperCase()}
                       </div>
-
-                      <div className="flex items-center gap-4">
-                        <div className="text-right">
-                          <div className={`text-sm font-medium ${
-                            player.ready ? 'text-green-400' : 'text-yellow-400'
-                          }`}>
-                            {player.ready ? 'Ready' : 'Not Ready'}
-                          </div>
-                          <div className={`w-3 h-3 rounded-full mt-1 ${
-                            player.ready ? 'bg-green-500' : 'bg-yellow-500'
-                          }`}></div>
-                        </div>
+                      <div>
+                        <p className="font-semibold text-text">
+                          {player.username}
+                          {isCurrentPlayer && <span className="text-text-secondary text-sm ml-2">(You)</span>}
+                          {room.host.id === player.id && (
+                            <span className="text-accent text-sm ml-2">Host</span>
+                          )}
+                        </p>
+                        <p className="text-text-secondary text-sm">Joined {new Date(player.joinedAt).toLocaleTimeString()}</p>
                       </div>
                     </div>
-                  </div>
+
+                    <motion.div
+                      animate={{
+                        scale: player.ready ? 1.1 : 1,
+                        backgroundColor: player.ready ? 'rgba(92, 225, 230, 0.2)' : 'rgba(255, 255, 255, 0.05)'
+                      }}
+                      className="px-4 py-2 rounded border border-border flex items-center gap-2 min-w-24 justify-center"
+                    >
+                      {player.ready ? (
+                        <>
+                          <Check className="w-4 h-4 text-accent" />
+                          <span className="text-accent text-sm font-medium">Ready</span>
+                        </>
+                      ) : (
+                        <span className="text-text-secondary text-sm">Waiting</span>
+                      )}
+                    </motion.div>
+                  </motion.div>
                 );
               })}
             </div>
+          </div>
 
-            {/* Race Status */}
-            {!raceStarted && (
-              <div className="mt-6 p-4 rounded-lg bg-[var(--color-card)] border border-[var(--color-border)]">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h3 className="font-medium text-[var(--color-text)] mb-1">Race Status</h3>
-                    <p className="text-sm text-[var(--color-muted)]">
-                      {allPlayersReady
-                        ? 'All players ready! Host can start the race.'
-                        : `${room.players.filter(p => p.ready).length}/${room.players.length} players ready`
-                      }
-                    </p>
-                  </div>
-                  {isHost && canStartRace && (
-                    <Button onClick={handleStartRace} size="lg">
-                      <Play className="w-4 h-4 mr-2" />
-                      Start Race Now
-                    </Button>
-                  )}
+          {/* Right Sidebar */}
+          <div className="space-y-6">
+            {/* Room Info */}
+            <div className="card p-6">
+              <h3 className="text-lg font-semibold text-text mb-4">Room Info</h3>
+              <div className="space-y-3 text-sm">
+                <div>
+                  <p className="text-text-secondary mb-1">Mode</p>
+                  <p className="text-text font-medium">60 seconds</p>
+                </div>
+                <div>
+                  <p className="text-text-secondary mb-1">Difficulty</p>
+                  <p className="text-text font-medium">Normal</p>
+                </div>
+                <div>
+                  <p className="text-text-secondary mb-1">Max Players</p>
+                  <p className="text-text font-medium">{room.maxPlayers}</p>
                 </div>
               </div>
-            )}
-          </Card>
-        </div>
-      </main>
+            </div>
 
-      <Footer />
+            {/* Player Actions */}
+            <div className="space-y-3">
+              <button
+                onClick={handleReady}
+                className={`w-full font-semibold py-3 px-4 rounded-lg transition-all ${
+                  isReady
+                    ? 'bg-accent/30 border border-accent text-accent'
+                    : 'btn-primary'
+                }`}
+              >
+                {isReady ? '✓ Ready' : 'Mark Ready'}
+              </button>
+
+              {isHost && room.players.length >= 2 && allReady && (
+                <button
+                  onClick={handleStartRace}
+                  className="w-full btn-success flex items-center justify-center gap-2 font-semibold py-3 px-4"
+                >
+                  <Play className="w-5 h-5" />
+                  Start Race
+                </button>
+              )}
+            </div>
+
+            {/* Status */}
+            {isHost && (
+              <div className="card p-4 bg-accent/10 border border-accent/30">
+                <p className="text-text-secondary text-xs mb-2">As room host, you can start the race</p>
+                <p className="text-accent text-sm font-medium">
+                  {room.players.length < 2
+                    ? `Need ${2 - room.players.length} more player${2 - room.players.length > 1 ? 's' : ''}`
+                    : allReady
+                    ? 'Everyone is ready!'
+                    : 'Waiting for all players to be ready'}
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

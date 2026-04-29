@@ -1,7 +1,40 @@
-const User = require('../models/User');
+const RaceHistory = require('../models/RaceHistory');
 
 const rooms = new Map();
 const activeRaces = new Map();
+
+function serializeRoom(room) {
+  if (!room) return null;
+
+  return {
+    id: room.id,
+    name: room.name,
+    host: room.host,
+    isPrivate: room.isPrivate,
+    maxPlayers: room.maxPlayers,
+    createdAt: room.createdAt,
+    status: room.status,
+    players: Array.from(room.players.values())
+  };
+}
+
+function serializeRoomListItem(room) {
+  return {
+    id: room.id,
+    name: room.name,
+    host: {
+      id: room.host.id,
+      username: room.host.username
+    },
+    players: Array.from(room.players.values()).map((p) => ({
+      id: p.id,
+      username: p.username
+    })),
+    maxPlayers: room.maxPlayers,
+    createdAt: room.createdAt,
+    isPrivate: room.isPrivate
+  };
+}
 
 function generateRoomId() {
   return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
@@ -41,21 +74,7 @@ function createRoom(name, host, isPrivate = false, password = null) {
 function getPublicRooms() {
   return Array.from(rooms.values())
     .filter(room => !room.isPrivate)
-    .map(room => ({
-      id: room.id,
-      name: room.name,
-      host: {
-        id: room.host.id,
-        username: room.host.username
-      },
-      players: Array.from(room.players.values()).map(p => ({
-        id: p.id,
-        username: p.username
-      })),
-      maxPlayers: room.maxPlayers,
-      createdAt: room.createdAt,
-      isPrivate: room.isPrivate
-    }));
+    .map((room) => serializeRoomListItem(room));
 }
 
 function startRaceCountdown(io, roomId) {
@@ -98,7 +117,7 @@ function startRace(io, roomId) {
   io.to(roomId).emit('race:started', raceData);
 }
 
-function updatePlayerProgress(roomId, playerId, progress, wpm, accuracy) {
+function updatePlayerProgress(io, roomId, playerId, progress, wpm, accuracy) {
   const room = rooms.get(roomId);
   if (!room || room.status !== 'active') return;
 
@@ -117,7 +136,11 @@ function updatePlayerProgress(roomId, playerId, progress, wpm, accuracy) {
     // Check if all players finished
     const activePlayers = Array.from(room.players.values()).filter(p => !p.finished);
     if (activePlayers.length === 0) {
-      finishRace(roomId);
+      const result = finishRace(roomId);
+      if (result) {
+        io.to(roomId).emit('race:finished', result);
+        io.to(roomId).emit('room:updated', serializeRoom(room));
+      }
     }
   }
 
@@ -146,6 +169,24 @@ function finishRace(roomId) {
     players: finishedPlayers,
     finishedAt: new Date()
   };
+
+  RaceHistory.insertMany(
+    finishedPlayers.map((player, index) => ({
+      userId: player.id,
+      roomId: room.id,
+      roomName: room.name,
+      placement: index + 1,
+      participants: room.players.size,
+      wpm: Number(player.wpm) || 0,
+      accuracy: Number(player.accuracy) || 0,
+      finishTime: Number(player.finishTime) || 0,
+      isWinner: index === 0,
+      raceTextSnippet: activeRaces.get(roomId)?.text?.slice(0, 160) || '',
+      finishedAt: new Date()
+    }))
+  ).catch((error) => {
+    console.error('Failed to persist race history:', error);
+  });
 
   // Clean up
   activeRaces.delete(roomId);
@@ -179,7 +220,7 @@ module.exports = (io) => {
 
       const room = createRoom(name, user, isPrivate, password);
       socket.join(room.id);
-      socket.emit('room:created', room);
+      socket.emit('room:created', serializeRoom(room));
       io.emit('rooms:list', getPublicRooms()); // Update all clients
     });
 
@@ -209,6 +250,12 @@ module.exports = (io) => {
         return;
       }
 
+      if (room.players.has(user.id)) {
+        socket.join(roomId);
+        socket.emit('room:joined', serializeRoom(room));
+        return;
+      }
+
       // Add player to room
       room.players.set(user.id, {
         id: user.id,
@@ -223,10 +270,11 @@ module.exports = (io) => {
       });
 
       socket.join(roomId);
-      socket.emit('room:joined', room);
+      socket.emit('room:joined', serializeRoom(room));
 
       // Notify other players
-      socket.to(roomId).emit('room:updated', room);
+      socket.to(roomId).emit('room:updated', serializeRoom(room));
+      io.emit('rooms:list', getPublicRooms());
     });
 
     // Leave room
@@ -250,7 +298,8 @@ module.exports = (io) => {
               room.host = remainingPlayers[0];
             }
 
-            socket.to(roomId).emit('room:updated', room);
+            io.to(roomId).emit('room:updated', serializeRoom(room));
+            io.emit('rooms:list', getPublicRooms());
           }
 
           socket.emit('room:left');
@@ -273,7 +322,7 @@ module.exports = (io) => {
       if (!player) return;
 
       player.ready = ready;
-      io.to(roomId).emit('room:updated', room);
+      io.to(roomId).emit('room:updated', serializeRoom(room));
     });
 
     // Start race
@@ -322,7 +371,7 @@ module.exports = (io) => {
 
       if (!user) return;
 
-      updatePlayerProgress(roomId, user.id, progress, wpm, accuracy);
+      updatePlayerProgress(io, roomId, user.id, progress, wpm, accuracy);
 
       const raceData = activeRaces.get(roomId);
       if (raceData) {

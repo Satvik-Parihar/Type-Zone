@@ -2,11 +2,33 @@ require('dotenv').config();
 const app = require('./app');
 const http = require('http');
 const { Server } = require('socket.io');
+const jwt = require('jsonwebtoken');
 const { connectDb } = require('./config/db');
 const { getCorsOptions } = require('./config/cors');
 const setupRaceSocket = require('./sockets/raceSocket');
 
 const PORT = process.env.PORT || 5000;
+
+// Socket.io auth middleware
+function socketAuthMiddleware(socket, next) {
+    const token = socket.handshake.auth.token || socket.handshake.headers.authorization?.slice(7);
+
+    if (!token) {
+        return next(new Error('Authentication required'));
+    }
+
+    try {
+        const payload = jwt.verify(token, process.env.JWT_SECRET);
+        socket.user = {
+            id: payload.sub,
+            email: payload.email,
+            username: payload.username
+        };
+        next();
+    } catch (error) {
+        next(new Error('Invalid or expired token'));
+    }
+}
 
 async function start() {
     try {
@@ -20,6 +42,9 @@ async function start() {
         const io = new Server(server, {
             cors: getCorsOptions()
         });
+
+        // Apply auth middleware to socket connections
+        io.use(socketAuthMiddleware);
 
         setupRaceSocket(io);
 

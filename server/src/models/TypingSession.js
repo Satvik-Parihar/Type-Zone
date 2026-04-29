@@ -74,6 +74,15 @@ const typingSessionSchema = new mongoose.Schema(
                 )
             ],
             default: []
+        },
+        wpmHistory: {
+            type: [Number],
+            default: []
+        },
+        keyAccuracy: {
+            type: Map,
+            of: Number,
+            default: {}
         }
     },
     {

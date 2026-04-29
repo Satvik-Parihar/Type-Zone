@@ -3,6 +3,7 @@ import { useTheme } from '../context/ThemeContext';
 import { Button } from '../ui/Button';
 import { Card } from '../ui/Card';
 import { Badge } from '../ui/Badge';
+import { X, Palette, Volume2, Monitor, SlidersHorizontal, MoonStar } from 'lucide-react';
 
 export default function SettingsPanel({ isOpen, onClose }) {
   const { currentTheme, switchTheme, allThemes } = useTheme();
@@ -37,19 +38,31 @@ export default function SettingsPanel({ isOpen, onClose }) {
       <Card variant="elevated" className="w-full max-w-2xl max-h-[90vh] overflow-y-auto">
         {/* Header */}
         <div className="flex items-center justify-between mb-6 pb-4 border-b border-[var(--color-border)]">
-          <h2 className="text-2xl font-bold text-[var(--color-text)]">Settings</h2>
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-[var(--color-accent)]/15 border border-[var(--color-accent)]/30 flex items-center justify-center text-[var(--color-accent)]">
+              <SlidersHorizontal className="w-5 h-5" />
+            </div>
+            <div>
+              <h2 className="text-2xl font-bold text-[var(--color-text)]">Settings</h2>
+              <p className="text-xs text-[var(--color-muted)]">Theme, sound, display, and behavior</p>
+            </div>
+          </div>
           <button
             onClick={onClose}
-            className="text-2xl text-[var(--color-muted)] hover:text-[var(--color-accent)] transition"
+            className="w-10 h-10 rounded-full flex items-center justify-center text-[var(--color-muted)] hover:text-[var(--color-accent)] hover:bg-[var(--color-card)] transition"
+            aria-label="Close settings"
           >
-            ✕
+            <X className="w-5 h-5" />
           </button>
         </div>
 
         <div className="space-y-8">
           {/* Theme Selection */}
           <section>
-            <h3 className="text-lg font-bold text-[var(--color-text)] mb-4">Theme</h3>
+            <div className="flex items-center gap-2 mb-4">
+              <Palette className="w-5 h-5 text-[var(--color-accent)]" />
+              <h3 className="text-lg font-bold text-[var(--color-text)]">Theme</h3>
+            </div>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               {Object.entries(allThemes).map(([key, theme]) => (
                 <button
@@ -75,7 +88,10 @@ export default function SettingsPanel({ isOpen, onClose }) {
 
           {/* Sound Settings */}
           <section>
-            <h3 className="text-lg font-bold text-[var(--color-text)] mb-4">Sound</h3>
+            <div className="flex items-center gap-2 mb-4">
+              <Volume2 className="w-5 h-5 text-[var(--color-accent)]" />
+              <h3 className="text-lg font-bold text-[var(--color-text)]">Sound</h3>
+            </div>
             <div className="space-y-3">
               <label className="flex items-center gap-3 cursor-pointer p-3 rounded-lg hover:bg-[var(--color-card)]">
                 <input
@@ -120,7 +136,10 @@ export default function SettingsPanel({ isOpen, onClose }) {
 
           {/* Display Settings */}
           <section>
-            <h3 className="text-lg font-bold text-[var(--color-text)] mb-4">Display</h3>
+            <div className="flex items-center gap-2 mb-4">
+              <Monitor className="w-5 h-5 text-[var(--color-accent)]" />
+              <h3 className="text-lg font-bold text-[var(--color-text)]">Display</h3>
+            </div>
             <div className="space-y-3">
               <div className="p-3 rounded-lg hover:bg-[var(--color-card)]">
                 <label className="block text-sm text-[var(--color-muted)] mb-2 font-semibold">Font Size</label>
@@ -182,7 +201,10 @@ export default function SettingsPanel({ isOpen, onClose }) {
 
           {/* Behavior Settings */}
           <section>
-            <h3 className="text-lg font-bold text-[var(--color-text)] mb-4">Behavior</h3>
+            <div className="flex items-center gap-2 mb-4">
+              <MoonStar className="w-5 h-5 text-[var(--color-accent)]" />
+              <h3 className="text-lg font-bold text-[var(--color-text)]">Behavior</h3>
+            </div>
             <div className="space-y-3">
               <label className="flex items-center gap-3 cursor-pointer p-3 rounded-lg hover:bg-[var(--color-card)]">
                 <input

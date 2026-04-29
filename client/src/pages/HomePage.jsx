@@ -1,168 +1,199 @@
-﻿import { Link } from 'react-router-dom';
+﻿import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Zap, Target, Trophy, Users, Clock, Award, BarChart3 } from 'lucide-react';
+import { ArrowRight, Zap, Users, BarChart3, Keyboard, Play } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import TypingArea from '../components/TypingArea';
 
-const HomePage = () => {
-  const sampleText = "The quick brown fox jumps over the lazy dog. This is a sample typing test to demonstrate the interface.";
+const TEST_WORDS = [
+  'the quick brown fox jumps over the lazy dog several times each day',
+  'productivity and creativity are the keys to success in the modern world',
+  'technology evolves at lightning speed disrupting established industries',
+  'passion drives innovation and innovation drives progress forward always',
+  'excellence is not a skill but a habit repeated daily with discipline'
+];
+
+export default function HomePage() {
+  const [stats, setStats] = useState({
+    totalSessions: 0,
+    totalUsers: 0,
+    activeUsers: 0,
+    topWpm24h: 0,
+    avgWpm: 0
+  });
+  const [testWords, setTestWords] = useState(TEST_WORDS[0]);
+  const [testComplete, setTestComplete] = useState(false);
+  const [testResult, setTestResult] = useState(null);
+
+  const hasCommunityStats =
+    stats.totalSessions > 0 ||
+    stats.totalUsers > 0 ||
+    stats.activeUsers > 0 ||
+    stats.topWpm24h > 0 ||
+    stats.avgWpm > 0;
+
+  useEffect(() => {
+    // Fetch real stats
+    const fetchStats = async () => {
+      try {
+        const res = await fetch('/api/typing/stats/global');
+        if (res.ok) {
+          setStats(await res.json());
+        }
+      } catch (error) {
+        console.error('Failed to fetch stats:', error);
+      }
+    };
+
+    fetchStats();
+
+    // Change test words periodically
+    const interval = setInterval(() => {
+      const randomText = TEST_WORDS[Math.floor(Math.random() * TEST_WORDS.length)];
+      setTestWords(randomText);
+      setTestComplete(false);
+      setTestResult(null);
+    }, 30000); // Change every 30 seconds
+
+    return () => clearInterval(interval);
+  }, []);
+
+  const handleTestComplete = (metrics) => {
+    setTestComplete(true);
+    setTestResult(metrics);
+  };
 
   const features = [
     {
       icon: Zap,
-      title: 'Live Metrics',
-      description: 'Real-time WPM, accuracy, and consistency tracking with smooth animations.',
+      title: 'Live WPM Tracking',
+      description: 'Real-time typing speed with visual feedback'
     },
     {
       icon: Users,
-      title: 'Multiplayer Races',
-      description: 'Compete with players worldwide in real-time typing competitions.',
-    },
-    {
-      icon: Target,
-      title: 'Custom Themes',
-      description: 'Choose from multiple beautiful themes to match your style and reduce eye strain.',
+      title: 'Race Others',
+      description: 'Compete with friends in multiplayer races'
     },
     {
       icon: BarChart3,
-      title: 'Accuracy Analytics',
-      description: 'Detailed statistics and progress tracking to improve your typing skills.',
+      title: 'Full Analytics',
+      description: 'Detailed statistics and performance insights'
     },
     {
-      icon: Clock,
-      title: 'Practice Drills',
-      description: 'Targeted exercises for numbers, symbols, and common mistakes.',
-    },
-    {
-      icon: Award,
-      title: 'Leaderboards',
-      description: 'Climb the ranks and see how you stack up against other typists.',
-    },
-  ];
-
-  const stats = [
-    { label: 'Users', value: '10,000+', icon: Users },
-    { label: 'Tests Taken', value: '500,000+', icon: BarChart3 },
-    { label: 'Avg WPM', value: '65', icon: Zap },
-    { label: 'Top WPM', value: '180+', icon: Trophy },
+      icon: Keyboard,
+      title: 'Multiple Modes',
+      description: 'Time, words, quotes, and custom text modes'
+    }
   ];
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Hero Section - Centered */}
-      <section className="pt-20 pb-20 px-4 sm:px-6 lg:px-8">
+      {/* Hero Section */}
+      <div className="pt-32 pb-20 px-4 text-center">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.8 }}
+        >
+          <h1 className="text-6xl md:text-7xl font-bold text-text mb-6">
+            type <span className="text-accent">faster</span>
+          </h1>
+          <p className="text-xl text-text-secondary max-w-2xl mx-auto mb-8">
+            The next-generation typing platform. Test your speed, track your progress, and compete with the world.
+          </p>
+          <Link to="/type" className="btn-primary inline-block">
+            Start Typing Now <ArrowRight className="w-4 h-4 ml-2" />
+          </Link>
+        </motion.div>
+      </div>
+
+      {/* Mini Typing Test */}
+      <div className="px-4 py-12 border-t border-b border-border bg-card/30">
+        <div className="max-w-3xl mx-auto">
+          <h2 className="text-2xl font-bold text-text mb-8 text-center">Try It Now</h2>
+          <TypingArea text={testWords} mode="time" duration={30} onComplete={handleTestComplete} minimal={true} />
+          
+          {testResult && testComplete && (
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="mt-8 text-center"
+            >
+              <p className="text-4xl font-bold text-accent mb-2">{Math.round(testResult.wpm || 0)} WPM</p>
+              <p className="text-text-secondary mb-6">{Math.round(testResult.accuracy || 100)}% accuracy</p>
+              <Link to="/type" className="btn-primary">
+                <Play className="w-4 h-4 mr-2" />
+                Full Test
+              </Link>
+            </motion.div>
+          )}
+        </div>
+      </div>
+
+      {/* Community Stats */}
+      <div className="py-16 px-4">
         <div className="max-w-4xl mx-auto">
-          <motion.div
-            initial={{ opacity: 0, y: -30 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8 }}
-            className="text-center"
-          >
-            <h1 className="text-6xl sm:text-7xl font-bold text-text mb-6 leading-tight">
-              Master typing with
-              <span className="text-accent"> precision</span>
-            </h1>
-            <p className="text-xl text-text-secondary mb-8 leading-relaxed max-w-2xl mx-auto">
-              Experience the next generation of typing tests. Real-time metrics,
-              beautiful animations, and a focus on what matters most - your progress.
-            </p>
-            <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <Link
-                to="/typing"
-                className="px-8 py-4 btn-primary font-semibold rounded-xl text-center"
-              >
-                Start Typing Test
-              </Link>
-              <Link
-                to="/practice"
-                className="px-8 py-4 btn-secondary font-semibold rounded-xl text-center"
-              >
-                Practice Drills
-              </Link>
+          <h2 className="text-3xl font-bold text-text mb-12 text-center">Community Statistics</h2>
+          {hasCommunityStats ? (
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+              {[
+                { label: 'Total Sessions', value: stats.totalSessions.toLocaleString() },
+                { label: 'Active Users', value: stats.activeUsers.toLocaleString() },
+                { label: 'Total Users', value: stats.totalUsers.toLocaleString() },
+                { label: 'Avg WPM', value: Math.round(stats.avgWpm) },
+                { label: 'Top WPM (24h)', value: Math.round(stats.topWpm24h) }
+              ].map((stat, idx) => (
+                <motion.div
+                  key={idx}
+                  initial={{ opacity: 0, y: 20 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  transition={{ delay: idx * 0.1 }}
+                  className="card p-4 text-center"
+                >
+                  <p className="text-text-secondary text-xs mb-2">{stat.label}</p>
+                  <p className="text-2xl font-bold text-accent">{stat.value}</p>
+                </motion.div>
+              ))}
             </div>
-          </motion.div>
+          ) : (
+            <div className="card p-8 text-center text-text-secondary">
+              Community stats will appear after the first live sessions are recorded.
+            </div>
+          )}
         </div>
-      </section>
+      </div>
 
-      {/* Typing Preview Section - Centered Large */}
-      <section className="py-20 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-2xl mx-auto text-center">
-          <motion.div
-            initial={{ opacity: 0, y: 30 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6 }}
-          >
-            <h2 className="text-4xl font-bold text-text mb-4">See it in action</h2>
-            <p className="text-lg text-text-secondary mb-12">Fast, smooth, and distraction-free typing experience</p>
-            <TypingArea text={sampleText} mode="time" duration={30} minimal={true} />
-          </motion.div>
-        </div>
-      </section>
-
-      {/* Features Section - 3 Column Grid */}
-      <section className="py-20 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-6xl mx-auto">
-          <motion.div
-            initial={{ opacity: 0, y: 30 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6 }}
-            className="text-center mb-16"
-          >
-            <h2 className="text-4xl font-bold text-text mb-4">Why TypeZone?</h2>
-            <p className="text-text-secondary text-lg max-w-2xl mx-auto">
-              Built for serious typists who want more than just a speed test.
-            </p>
-          </motion.div>
-
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {features.map((feature, index) => (
-              <motion.div
-                key={feature.title}
-                initial={{ opacity: 0, y: 30 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.6, delay: index * 0.1 }}
-                className="glass-panel p-6 rounded-xl hover:border-accent/50 transition-colors group"
-              >
-                <feature.icon className="w-8 h-8 text-accent mb-4 group-hover:scale-110 transition-transform" />
-                <h3 className="text-xl font-semibold text-text mb-2">{feature.title}</h3>
-                <p className="text-text-secondary">{feature.description}</p>
-              </motion.div>
-            ))}
+      {/* Features Grid */}
+      <div className="py-16 px-4 border-t border-border">
+        <div className="max-w-4xl mx-auto">
+          <h2 className="text-3xl font-bold text-text mb-12 text-center">Why TypeZone?</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {features.map((feature, idx) => {
+              const Icon = feature.icon;
+              return (
+                <motion.div
+                  key={idx}
+                  initial={{ opacity: 0, y: 20 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  transition={{ delay: idx * 0.1 }}
+                  className="card p-6"
+                >
+                  <Icon className="w-8 h-8 text-accent mb-4" />
+                  <h3 className="text-lg font-semibold text-text mb-2">{feature.title}</h3>
+                  <p className="text-text-secondary text-sm">{feature.description}</p>
+                </motion.div>
+              );
+            })}
           </div>
         </div>
-      </section>
+      </div>
 
-      {/* Stats Section */}
-      <section className="py-20 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-6xl mx-auto">
-          <motion.div
-            initial={{ opacity: 0, y: 30 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6 }}
-            className="text-center mb-16"
-          >
-            <h2 className="text-4xl font-bold text-text mb-4">Community Stats</h2>
-            <p className="text-text-secondary text-lg">Join thousands of typists improving every day</p>
-          </motion.div>
-
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-8">
-            {stats.map((stat, index) => (
-              <motion.div
-                key={stat.label}
-                initial={{ opacity: 0, scale: 0.8 }}
-                whileInView={{ opacity: 1, scale: 1 }}
-                transition={{ duration: 0.6, delay: index * 0.1 }}
-                className="text-center glass-panel p-8 rounded-xl"
-              >
-                <stat.icon className="w-8 h-8 text-accent mx-auto mb-4" />
-                <div className="text-4xl font-bold text-text mb-2">{stat.value}</div>
-                <div className="text-text-secondary font-medium">{stat.label}</div>
-              </motion.div>
-            ))}
-          </div>
-        </div>
-      </section>
+      {/* CTA Section */}
+      <div className="py-16 px-4 text-center border-t border-border">
+        <h2 className="text-3xl font-bold text-text mb-6">Ready to test your typing?</h2>
+        <Link to="/type" className="btn-primary inline-block">
+          Start Your First Test
+        </Link>
+      </div>
     </div>
   );
-};
-
-export default HomePage;
+}

@@ -1,6 +1,7 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Trophy, Crown, ArrowUp, ArrowDown } from 'lucide-react';
+import { SkeletonTable } from '../ui/SkeletonLoader';
 
 const leaders = [
   { name: 'Avery Chen', wpm: 182, accuracy: 99.2, rank: 1, date: '2026-03-28' },
@@ -23,6 +24,12 @@ const sortFields = [
 const LeaderboardPage = () => {
   const [sortBy, setSortBy] = useState('rank');
   const [sortDirection, setSortDirection] = useState('asc');
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setLoading(false), 450);
+    return () => clearTimeout(timer);
+  }, []);
 
   const sortedLeaders = useMemo(() => {
     return [...leaders].sort((a, b) => {
@@ -75,6 +82,12 @@ const LeaderboardPage = () => {
           transition={{ delay: 0.2 }}
           className="glass-panel border border-border overflow-hidden"
         >
+          {loading ? (
+            <div className="p-6">
+              <SkeletonTable rows={8} columns={6} />
+            </div>
+          ) : (
+            <>
           <div className="grid grid-cols-6 gap-4 p-5 border-b border-border bg-background/80 text-text-secondary text-sm uppercase tracking-[0.2em]">
             {sortFields.map((field) => (
               <button
@@ -112,6 +125,8 @@ const LeaderboardPage = () => {
               </motion.div>
             ))}
           </div>
+            </>
+          )}
         </motion.div>
       </div>
     </div>

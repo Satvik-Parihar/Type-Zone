@@ -1,39 +1,13 @@
-import { useState, useEffect, useMemo } from 'react';
-import { themes, defaultTheme } from '../design/themes';
+import { useTheme as useThemeContext } from '../context/ThemeContext';
 
+// Compatibility wrapper so older call sites can keep using changeTheme/themes/getTheme.
 export const useTheme = () => {
-  const [currentTheme, setCurrentTheme] = useState(() => {
-    const saved = localStorage.getItem('typezone-theme');
-    return saved && themes[saved] ? saved : defaultTheme;
-  });
-
-  const themeKeys = useMemo(() => Object.keys(themes), []);
-
-  useEffect(() => {
-    const theme = themes[currentTheme];
-    const root = document.documentElement;
-
-    Object.entries(theme).forEach(([key, value]) => {
-      if (key !== 'name') {
-        root.style.setProperty(`--color-${key}`, value);
-      }
-    });
-
-    localStorage.setItem('typezone-theme', currentTheme);
-  }, [currentTheme]);
-
-  const changeTheme = (themeName) => {
-    if (themes[themeName]) {
-      setCurrentTheme(themeName);
-    }
-  };
-
-  const getTheme = () => themes[currentTheme];
+  const ctx = useThemeContext();
 
   return {
-    currentTheme,
-    changeTheme,
-    getTheme,
-    themes: themeKeys,
+    ...ctx,
+    changeTheme: ctx.switchTheme,
+    themes: ctx.themeKeys,
+    getTheme: () => ctx.theme,
   };
 };

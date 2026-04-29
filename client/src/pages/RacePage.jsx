@@ -1,361 +1,381 @@
-import { useState, useEffect, useRef } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
-import { io } from 'socket.io-client';
-import { Button } from '../ui/Button';
-import { Card } from '../ui/Card';
-import { Badge } from '../ui/Badge';
-import Navbar from '../layout/Navbar';
-import Footer from '../components/Footer';
-import { Trophy, Crown, Zap, Target, Clock, Home } from 'lucide-react';
-import { useAuth } from '../context/AuthContext';
+import { useState, useEffect } from 'react';
+import { motion } from 'framer-motion';
+import { useParams, useNavigate } from 'react-router-dom';
+import { RotateCcw, Home } from 'lucide-react';
+import { useTypingEngine } from '../hooks/useTypingEngine';
+import { useSocket } from '../hooks/useSocket';
+import { raceEvents, playerEvents } from '../services/socketService';
 
-const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:5000';
+const RACE_TEXT = 'the quick brown fox jumps over the lazy dog in the vast expanse of the forest where sunlight filters through ancient trees and birds sing their melodious songs';
+
+const PlayerTrack = ({ player, raceText, isCurrentUser }) => {
+  const progress = typeof player.progress === 'number'
+    ? Math.max(0, Math.min(player.progress, 100))
+    : Math.min(((player.charactersTyped || 0) / raceText.length) * 100, 100);
+  const displayName = player.username || player.name || 'Player';
+
+  return (
+    <div className={`p-4 rounded-lg border transition-colors ${
+      isCurrentUser ? 'border-accent bg-accent/5' : 'border-border'
+    }`}>
+      <div className="flex justify-between items-center mb-3">
+        <p className="font-semibold text-text">{displayName}</p>
+        <p className="text-accent font-bold">{Math.round(player.wpm)} WPM</p>
+      </div>
+      <div className="relative h-3 rounded-full bg-surface overflow-hidden">
+        <motion.div
+          className="h-full bg-accent rounded-full"
+          animate={{ width: `${progress}%` }}
+          transition={{ duration: 0.2 }}
+        />
+      </div>
+      <p className="text-xs text-text-secondary mt-2">{Math.floor(progress)}% complete</p>
+    </div>
+  );
+};
 
 export default function RacePage() {
   const { roomId } = useParams();
-  const { user } = useAuth();
   const navigate = useNavigate();
-  const [socket, setSocket] = useState(null);
-  const [raceData, setRaceData] = useState(null);
-  const [countdown, setCountdown] = useState(3);
+  const socket = useSocket();
   const [raceStarted, setRaceStarted] = useState(false);
   const [raceFinished, setRaceFinished] = useState(false);
-  const [winner, setWinner] = useState(null);
-  const [showConfetti, setShowConfetti] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const confettiRef = useRef(null);
+  const [raceText, setRaceText] = useState('');
+  const [players, setPlayers] = useState([
+    { id: '1', name: 'You', charactersTyped: 0, wpm: 0, accuracy: 100, finished: false, finishTime: 0 },
+    { id: '2', name: 'Player2', charactersTyped: 0, wpm: 0, accuracy: 100, finished: false, finishTime: 0 },
+    { id: '3', name: 'Player3', charactersTyped: 0, wpm: 0, accuracy: 100, finished: false, finishTime: 0 }
+  ]);
+  const [countdown, setCountdown] = useState(3);
 
+  const {
+    input,
+    currentIndex,
+    isActive,
+    isFinished,
+    metrics,
+    startTest,
+    resetTest,
+    handleInput,
+    inputRef
+  } = useTypingEngine(raceText || RACE_TEXT, 'time', 60);
+
+  // Socket event handlers for real-time race updates
   useEffect(() => {
-    const newSocket = io(SOCKET_URL);
-    setSocket(newSocket);
+    if (!socket || !roomId) return;
 
-    newSocket.on('race:joined', (data) => {
-      setRaceData(data);
-      setLoading(false);
-    });
+    socket.emit(raceEvents.JOIN_RACE, { roomId });
 
-    newSocket.on('race:countdown', (count) => {
+    const handleRaceStarted = (data) => {
+      setRaceText(data.text || RACE_TEXT);
+      setRaceStarted(true);
+      setCountdown(3);
+    };
+
+    const handleRaceCountdown = (count) => {
       setCountdown(count);
-      if (count === 0) {
-        setTimeout(() => setRaceStarted(true), 1000);
+    };
+
+    const handleRaceUpdate = (raceData) => {
+      // Update player list with real-time progress
+      if (raceData.players) {
+        setPlayers(raceData.players);
       }
-    });
+    };
 
-    newSocket.on('race:update', (data) => {
-      setRaceData(data);
-    });
-
-    newSocket.on('race:finished', (data) => {
-      setRaceData(data);
+    const handleRaceFinished = (result) => {
       setRaceFinished(true);
-      setWinner(data.winner);
-
-      // Show confetti for winner
-      if (data.winner.id === user?.id) {
-        setShowConfetti(true);
-        setTimeout(() => setShowConfetti(false), 5000);
+      // Update final rankings
+      if (result.players) {
+        setPlayers(result.players);
       }
-    });
+    };
 
-    newSocket.on('error', (error) => {
-      setError(error.message);
-      setLoading(false);
-    });
-
-    // Join the race
-    newSocket.emit('race:join', { roomId });
+    socket.on(raceEvents.RACE_STARTED, handleRaceStarted);
+    socket.on(raceEvents.RACE_COUNTDOWN, handleRaceCountdown);
+    socket.on(raceEvents.RACE_UPDATE, handleRaceUpdate);
+    socket.on(raceEvents.RACE_FINISHED, handleRaceFinished);
 
     return () => {
-      newSocket.disconnect();
+      socket.off(raceEvents.RACE_STARTED, handleRaceStarted);
+      socket.off(raceEvents.RACE_COUNTDOWN, handleRaceCountdown);
+      socket.off(raceEvents.RACE_UPDATE, handleRaceUpdate);
+      socket.off(raceEvents.RACE_FINISHED, handleRaceFinished);
     };
-  }, [roomId, user?.id]);
+  }, [socket, roomId]);
 
-  const handleBackToLobby = () => {
-    navigate('/lobby');
-  };
+  // Simulate other players progressing and send updates via socket
+  useEffect(() => {
+    if (!raceStarted) return;
 
-  const handleBackToHome = () => {
-    navigate('/home');
-  };
+    const startTime = Date.now();
+    const interval = setInterval(() => {
+      setPlayers(prev => {
+        const updated = prev.map((p, idx) => {
+          if (idx === 0) {
+            return { 
+              ...p, 
+              charactersTyped: currentIndex, 
+              wpm: metrics.wpm || 0, 
+              accuracy: metrics.accuracy || 100,
+              finished: isFinished,
+              finishTime: isFinished ? (Date.now() - startTime) / 1000 : 0
+            };
+          }
+          if (!p.finished) {
+            const progress = Math.min(p.charactersTyped + Math.random() * 3, (raceText || RACE_TEXT).length);
+            const finished = progress >= (raceText || RACE_TEXT).length;
+            return {
+              ...p,
+              charactersTyped: progress,
+              wpm: Math.round(Math.random() * 100 + 60),
+              accuracy: Math.round(Math.random() * 20 + 80),
+              finished: finished,
+              finishTime: finished ? (Date.now() - startTime) / 1000 : 0
+            };
+          }
+          return p;
+        });
 
-  const sortedPlayers = raceData?.players
-    ? [...raceData.players].sort((a, b) => {
-        if (raceFinished) {
-          return a.finishTime - b.finishTime;
+        // Send progress update to socket
+        if (socket && roomId) {
+          socket.emit(playerEvents.UPDATE_PROGRESS, {
+            roomId,
+            progress: (currentIndex / (raceText || RACE_TEXT).length) * 100,
+            wpm: metrics.wpm || 0,
+            accuracy: metrics.accuracy || 100
+          });
         }
-        return b.progress - a.progress;
-      })
-    : [];
 
-  const currentPlayer = sortedPlayers.find(p => p.id === user?.id);
+        return updated;
+      });
+    }, 300);
 
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center" style={{ background: 'var(--color-bg)' }}>
-        <div className="text-center">
-          <div className="w-16 h-16 border-4 border-[var(--color-accent)] border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-[var(--color-text)]">Loading race...</p>
-        </div>
-      </div>
-    );
-  }
+    return () => clearInterval(interval);
+  }, [raceStarted, currentIndex, metrics, isFinished, socket, roomId, raceText]);
 
-  if (error) {
-    return (
-      <div className="min-h-screen flex items-center justify-center" style={{ background: 'var(--color-bg)' }}>
-        <Card className="p-8 text-center max-w-md">
-          <h2 className="text-xl font-semibold text-red-400 mb-4">Error</h2>
-          <p className="text-[var(--color-muted)] mb-6">{error}</p>
-          <Button onClick={handleBackToLobby}>Back to Lobby</Button>
-        </Card>
-      </div>
-    );
-  }
+  // Race countdown
+  useEffect(() => {
+    if (!raceStarted) return;
+
+    if (countdown > 0) {
+      const timer = setTimeout(() => setCountdown(countdown - 1), 1000);
+      return () => clearTimeout(timer);
+    }
+
+    if (countdown === 0) {
+      startTest();
+    }
+  }, [countdown, raceStarted, startTest]);
+
+  useEffect(() => {
+    if (isFinished) {
+      setRaceFinished(true);
+    }
+  }, [isFinished]);
+
+  const handleRaceStart = () => {
+    setRaceStarted(true);
+  };
+
+  const handleRetry = () => {
+    resetTest();
+    setRaceStarted(false);
+    setRaceFinished(false);
+    setCountdown(3);
+    setPlayers((prev) => prev.map((p) => ({ ...p, charactersTyped: 0, wpm: 0, accuracy: 100, finished: false, finishTime: 0 })));
+  };
 
   return (
-    <div className="min-h-screen" style={{ background: 'var(--color-bg)' }}>
-      <Navbar />
-
-      {/* Confetti Animation */}
-      {showConfetti && (
-        <div className="fixed inset-0 pointer-events-none z-50" ref={confettiRef}>
-          <div className="absolute inset-0 overflow-hidden">
-            {Array.from({ length: 50 }).map((_, i) => (
-              <div
-                key={i}
-                className="absolute animate-bounce"
-                style={{
-                  left: `${Math.random() * 100}%`,
-                  animationDelay: `${Math.random() * 2}s`,
-                  animationDuration: `${2 + Math.random() * 2}s`
-                }}
-              >
-                <div
-                  className="w-3 h-3 rounded-full"
-                  style={{
-                    background: ['#06B6D4', '#2563EB', '#10B981', '#F59E0B', '#EF4444'][Math.floor(Math.random() * 5)]
-                  }}
-                />
-              </div>
-            ))}
+    <div className="min-h-screen bg-background pt-24 pb-12">
+      <div className="max-w-5xl mx-auto px-4">
+        {/* Header */}
+        <div className="mb-12 flex justify-between items-start">
+          <div>
+            <h1 className="text-5xl font-bold text-text mb-2">Live Race</h1>
+            <p className="text-text-secondary">Type fast to win!</p>
           </div>
+          <button
+            onClick={() => navigate('/multiplayer')}
+            className="btn-ghost"
+          >
+            <Home className="w-4 h-4 mr-2" />
+            Lobby
+          </button>
         </div>
-      )}
 
-      {/* Countdown Overlay */}
-      {countdown > 0 && !raceStarted && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-40 flex items-center justify-center">
-          <div className="text-center">
-            <div className="text-9xl font-black text-white mb-4 animate-pulse">
+        {/* Race Tracks */}
+        <div className="mb-12 space-y-4">
+          {players.map((player, idx) => (
+            <PlayerTrack
+              key={player.id}
+              player={player}
+              raceText={raceText || RACE_TEXT}
+              isCurrentUser={idx === 0}
+            />
+          ))}
+        </div>
+
+        {/* Countdown */}
+        {raceStarted && countdown > 0 && (
+          <motion.div
+            initial={{ scale: 0.5, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            className="fixed inset-0 flex items-center justify-center z-40"
+          >
+            <motion.div
+              animate={{ scale: [1, 1.2, 1] }}
+              transition={{ duration: 1, repeat: 3 }}
+              className="text-9xl font-bold text-accent"
+            >
               {countdown}
-            </div>
-            <p className="text-white/80 text-xl">Get ready...</p>
-          </div>
-        </div>
-      )}
+            </motion.div>
+          </motion.div>
+        )}
 
-      {/* Race Finished Overlay */}
-      {raceFinished && winner && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-40 flex items-center justify-center">
-          <Card className="p-8 text-center max-w-md">
-            <Trophy className="w-16 h-16 text-yellow-500 mx-auto mb-4" />
-            <h2 className="text-2xl font-bold text-[var(--color-text)] mb-2">Race Complete!</h2>
-            <div className="flex items-center justify-center gap-3 mb-6">
-              <div className="w-12 h-12 rounded-full bg-gradient-to-br from-yellow-500 to-orange-600 flex items-center justify-center text-white font-bold text-xl">
-                {winner.username.charAt(0).toUpperCase()}
-              </div>
-              <div>
-                <p className="text-lg font-semibold text-[var(--color-text)]">{winner.username}</p>
-                <p className="text-sm text-[var(--color-muted)]">Winner!</p>
-              </div>
-            </div>
-            <div className="flex gap-3">
-              <Button onClick={handleBackToLobby} className="flex-1">
-                Back to Lobby
-              </Button>
-              <Button variant="secondary" onClick={handleBackToHome} className="flex-1">
-                <Home className="w-4 h-4 mr-2" />
-                Home
-              </Button>
-            </div>
-          </Card>
-        </div>
-      )}
-
-      <main className="container mx-auto px-4 py-8">
-        <div className="max-w-6xl mx-auto">
-          {/* Race Header */}
-          <Card className="p-6 mb-6">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center">
-                  <Zap className="w-6 h-6 text-white" />
-                </div>
-                <div>
-                  <h1 className="text-2xl font-bold text-[var(--color-text)]">Live Race</h1>
-                  <p className="text-[var(--color-muted)]">
-                    {raceData?.players?.length || 0} competitors • {raceData?.text?.length || 0} characters
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-4">
-                {raceStarted && !raceFinished && (
-                  <div className="flex items-center gap-2 text-[var(--color-text)]">
-                    <Clock className="w-5 h-5" />
-                    <span className="font-mono text-lg">
-                      {Math.floor((Date.now() - (raceData?.startTime || Date.now())) / 1000)}s
-                    </span>
-                  </div>
-                )}
-
-                <Button variant="secondary" onClick={handleBackToLobby}>
-                  <Home className="w-4 h-4 mr-2" />
-                  Lobby
-                </Button>
-              </div>
-            </div>
-          </Card>
-
-          {/* Race Tracks */}
-          <div className="space-y-4 mb-6">
-            {sortedPlayers.map((player, index) => {
-              const isCurrentUser = player.id === user?.id;
-              const isWinner = raceFinished && winner && player.id === winner.id;
-
-              return (
-                <Card
-                  key={player.id}
-                  className={`p-4 transition-all ${
-                    isCurrentUser ? 'ring-2 ring-[var(--color-accent)]' : ''
-                  } ${isWinner ? 'ring-2 ring-yellow-500 bg-yellow-500/5' : ''}`}
-                >
-                  <div className="flex items-center gap-4 mb-3">
-                    {/* Position & Avatar */}
-                    <div className="flex items-center gap-3">
-                      <div className="flex items-center gap-2 min-w-[60px]">
-                        <span className="text-lg font-bold text-[var(--color-muted)] w-6">
-                          #{index + 1}
-                        </span>
-                        <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-lg ${
-                          isCurrentUser
-                            ? 'bg-gradient-to-br from-cyan-500 to-blue-600'
-                            : isWinner
-                            ? 'bg-gradient-to-br from-yellow-500 to-orange-600'
-                            : 'bg-gradient-to-br from-gray-500 to-gray-600'
-                        }`}>
-                          {player.username.charAt(0).toUpperCase()}
-                        </div>
-                      </div>
-
-                      {/* Player Info */}
-                      <div className="min-w-[150px]">
-                        <div className="flex items-center gap-2">
-                          <span className={`font-semibold ${isCurrentUser ? 'text-[var(--color-accent)]' : 'text-[var(--color-text)]'}`}>
-                            {player.username}
-                          </span>
-                          {isCurrentUser && <Badge variant="primary" size="sm">You</Badge>}
-                          {isWinner && (
-                            <Badge variant="secondary" className="flex items-center gap-1">
-                              <Crown className="w-3 h-3" />
-                              Winner
-                            </Badge>
-                          )}
-                        </div>
-                        {raceFinished && player.finishTime && (
-                          <p className="text-xs text-[var(--color-muted)]">
-                            Finished in {player.finishTime}s
-                          </p>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Stats */}
-                    <div className="flex items-center gap-6 ml-auto">
-                      <div className="text-center">
-                        <div className="text-xl font-bold text-[var(--color-text)]">
-                          {player.wpm || 0}
-                        </div>
-                        <div className="text-xs text-[var(--color-muted)]">WPM</div>
-                      </div>
-                      <div className="text-center">
-                        <div className="text-xl font-bold text-[var(--color-text)]">
-                          {player.accuracy || 0}%
-                        </div>
-                        <div className="text-xs text-[var(--color-muted)]">Accuracy</div>
-                      </div>
-                      <div className="text-center min-w-[80px]">
-                        <div className="text-xl font-bold text-[var(--color-text)]">
-                          {player.progress || 0}%
-                        </div>
-                        <div className="text-xs text-[var(--color-muted)]">Progress</div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Progress Track */}
-                  <div className="relative">
-                    <div className="h-4 w-full rounded-full bg-[var(--color-bg)] border border-[var(--color-border)] overflow-hidden">
-                      <div
-                        className="h-full bg-gradient-to-r from-cyan-500 to-blue-500 transition-all duration-300 ease-out relative"
-                        style={{ width: `${player.progress || 0}%` }}
-                      >
-                        {/* Animated cursor */}
-                        <div
-                          className="absolute top-0 right-0 w-1 h-full bg-white/80 rounded-r-full animate-pulse"
-                          style={{
-                            transform: player.progress > 0 ? 'translateX(0)' : 'translateX(-100%)',
-                            transition: 'transform 0.3s ease-out'
-                          }}
-                        />
-                      </div>
-                    </div>
-
-                    {/* Finish line */}
-                    <div className="absolute top-0 right-0 w-1 h-full bg-gradient-to-b from-transparent via-white to-transparent opacity-50"></div>
-                  </div>
-                </Card>
-              );
-            })}
-          </div>
-
-          {/* Current Player Stats */}
-          {currentPlayer && (
-            <Card className="p-6">
-              <h3 className="text-lg font-semibold text-[var(--color-text)] mb-4">Your Performance</h3>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div className="text-center p-4 bg-[var(--color-bg)] rounded-lg">
-                  <div className="text-2xl font-bold text-[var(--color-text)]">
-                    {currentPlayer.wpm || 0}
-                  </div>
-                  <div className="text-sm text-[var(--color-muted)]">Current WPM</div>
-                </div>
-                <div className="text-center p-4 bg-[var(--color-bg)] rounded-lg">
-                  <div className="text-2xl font-bold text-[var(--color-text)]">
-                    {currentPlayer.accuracy || 0}%
-                  </div>
-                  <div className="text-sm text-[var(--color-muted)]">Accuracy</div>
-                </div>
-                <div className="text-center p-4 bg-[var(--color-bg)] rounded-lg">
-                  <div className="text-2xl font-bold text-[var(--color-text)]">
-                    {currentPlayer.progress || 0}%
-                  </div>
-                  <div className="text-sm text-[var(--color-muted)]">Progress</div>
-                </div>
-                <div className="text-center p-4 bg-[var(--color-bg)] rounded-lg">
-                  <div className="text-2xl font-bold text-[var(--color-text)]">
-                    #{sortedPlayers.findIndex(p => p.id === user?.id) + 1}
-                  </div>
-                  <div className="text-sm text-[var(--color-muted)]">Position</div>
-                </div>
-              </div>
-            </Card>
+        {/* Typing Area */}
+        <div className="mb-12">
+          {!raceStarted && !raceFinished && (
+            <button
+              onClick={handleRaceStart}
+              className="btn-primary w-full py-4 text-lg mb-6"
+            >
+              Start Race
+            </button>
           )}
-        </div>
-      </main>
 
-      <Footer />
+          <div className="card p-8 rounded-2xl">
+            <div className="bg-card/50 backdrop-blur-sm p-8 rounded-xl border border-border-dark min-h-[150px] overflow-hidden">
+              <div className="font-mono text-xl leading-relaxed text-text-secondary">
+                {(raceText || RACE_TEXT).split('').map((char, idx) => {
+                  let className = '';
+                  if (idx < input.length) {
+                    className = input[idx] === char ? 'text-text bg-green-500/20' : 'text-error bg-error/20';
+                  } else if (idx === currentIndex && isActive) {
+                    className = 'text-accent';
+                  }
+                  return (
+                    <span key={idx} className={className}>
+                      {char}
+                    </span>
+                  );
+                })}
+              </div>
+            </div>
+
+            <input
+              ref={inputRef}
+              value={input}
+              onChange={(e) => handleInput(e.target.value)}
+              className="absolute inset-0 opacity-0"
+              autoComplete="off"
+              spellCheck="false"
+              disabled={!raceStarted || countdown > 0 || raceFinished}
+            />
+          </div>
+        </div>
+
+        {/* Results */}
+        {raceFinished && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mb-12"
+          >
+            {/* Winner Banner */}
+            <div className="card p-8 text-center mb-8 bg-gradient-to-r from-accent/20 to-accent/10 border-accent/30">
+              <motion.div
+                animate={{ scale: [1, 1.05, 1] }}
+                transition={{ duration: 0.5 }}
+                className="inline-block mb-4"
+              >
+                <div className="text-5xl font-bold text-accent">WIN</div>
+              </motion.div>
+              <h2 className="text-3xl font-bold text-text mb-2">Race Completed!</h2>
+              <p className="text-text-secondary">
+                {players[0].finished ? 'You won the race!' : 'Better luck next time!'}
+              </p>
+            </div>
+
+            {/* Your Stats */}
+            <div className="card p-8 mb-8">
+              <h3 className="text-xl font-bold text-text mb-6">Your Results</h3>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="text-center">
+                  <p className="text-text-secondary text-sm mb-2">WPM</p>
+                  <p className="text-3xl font-bold text-accent">{Math.round(metrics.wpm || 0)}</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-text-secondary text-sm mb-2">Accuracy</p>
+                  <p className="text-3xl font-bold text-text">{Math.round(metrics.accuracy || 100)}%</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-text-secondary text-sm mb-2">Errors</p>
+                  <p className="text-3xl font-bold text-error">{metrics.errors || 0}</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-text-secondary text-sm mb-2">Time</p>
+                  <p className="text-3xl font-bold text-text">{Math.round((metrics.time || 0) / 1000)}s</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Rankings */}
+            <div className="card p-8 mb-8">
+              <h3 className="text-xl font-bold text-text mb-6">Final Rankings</h3>
+              <div className="space-y-3">
+                {players.map((player, idx) => {
+                  const placement = idx + 1;
+                  const displayName = player.username || player.name || 'Player';
+                  return (
+                    <motion.div
+                      key={player.id}
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: idx * 0.1 }}
+                      className={`flex items-center justify-between p-4 rounded-lg border transition-colors ${
+                        idx === 0 ? 'border-accent bg-accent/5' : 'border-border'
+                      }`}
+                    >
+                      <div className="flex items-center gap-4">
+                        <span className="text-2xl font-bold text-text-secondary w-8">{placement}</span>
+                        <div>
+                          <p className="font-semibold text-text">{displayName}</p>
+                          <p className="text-xs text-text-secondary">
+                            {player.finished ? `Finished in ${player.finishTime}s` : 'Did not finish'}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-bold text-text text-lg">{Math.round(player.wpm)} WPM</p>
+                        <p className="text-xs text-text-secondary">{Math.round(player.accuracy)}% acc</p>
+                      </div>
+                    </motion.div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex gap-4 justify-center">
+              <button
+                onClick={handleRetry}
+                className="btn-primary flex items-center gap-2"
+              >
+                <RotateCcw className="w-4 h-4" />
+                Race Again
+              </button>
+              <button
+                onClick={() => navigate('/multiplayer')}
+                className="btn-secondary flex items-center gap-2"
+              >
+                <Home className="w-4 h-4" />
+                Back to Lobby
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </div>
     </div>
   );
 }
