@@ -265,7 +265,7 @@ export default function RoomPage() {
               {isHost && room.players.length >= 2 && allReady && (
                 <button
                   onClick={handleStartRace}
-                  className="w-full btn-success flex items-center justify-center gap-2 font-semibold py-3 px-4"
+                  className="w-full btn-primary flex items-center justify-center gap-2 font-semibold py-3 px-4"
                 >
                   <Play className="w-5 h-5" />
                   Start Race

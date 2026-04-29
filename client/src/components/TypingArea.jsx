@@ -512,7 +512,7 @@ export default function TypingArea({
     return (
       <div className="w-full">
         <div className="glass-panel p-8 rounded-2xl cursor-text" onClick={() => inputRef.current?.focus()}>
-          <div className="relative bg-card/50 backdrop-blur-sm p-6 rounded-xl border border-border-dark min-h-[120px] overflow-hidden">
+          <div className="relative bg-card/50 backdrop-blur-sm p-6 rounded-xl border border-border min-h-[120px] overflow-hidden">
             <div ref={outerRef} style={{ height: outerHeight, overflow: 'hidden' }}>
               <div ref={innerRef} className="flex flex-wrap gap-1 leading-relaxed font-mono text-lg" style={{ transform: `translateY(-${translateY}px)` }}>
                 {tokens.map((token, idx) => (

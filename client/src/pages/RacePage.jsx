@@ -211,7 +211,7 @@ export default function RacePage() {
           )}
 
           <div className="card p-8 rounded-2xl">
-            <div className="bg-card/50 backdrop-blur-sm p-8 rounded-xl border border-border-dark min-h-[150px] overflow-hidden">
+            <div className="bg-card/50 backdrop-blur-sm p-8 rounded-xl border border-border min-h-[150px] overflow-hidden">
               <div className="font-mono text-xl leading-relaxed text-text-secondary">
                 {raceText.split('').map((char, idx) => {
                   let className = '';
