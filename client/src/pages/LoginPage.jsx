@@ -1,11 +1,12 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { LogIn } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 export default function LoginPage() {
   const { login, signup } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const [mode, setMode] = useState('login');
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
@@ -24,7 +25,8 @@ export default function LoginPage() {
       } else {
         await signup(username, email, password);
       }
-      navigate('/');
+      const from = location.state?.from || '/';
+      navigate(from, { replace: true });
     } catch (requestError) {
       setError(requestError?.response?.data?.message || 'Unable to authenticate. Please try again.');
     } finally {

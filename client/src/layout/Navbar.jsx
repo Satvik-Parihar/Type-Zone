@@ -15,7 +15,7 @@ export default function Navbar() {
 
   const navLinks = [
     { label: 'Home', href: '/' },
-    { label: 'Typing', href: '/typing' },
+    { label: 'Type', href: '/type' },
     { label: 'Multiplayer', href: '/multiplayer' },
     { label: 'Leaderboard', href: '/leaderboard' },
     { label: 'Practice', href: '/practice' },

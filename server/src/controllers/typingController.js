@@ -1,6 +1,6 @@
 const { z } = require('zod');
 const TypingSession = require('../models/TypingSession');
-const { startTypingSession, submitTypingSession } = require('../services/typingService');
+const { startTypingSession, submitTypingSession, calculateStreak } = require('../services/typingService');
 
 const MODE_ENUM = ['words', 'quote', 'time', 'numbers', 'code', 'punctuation', 'sentence', 'paragraph', 'zen', 'practice', 'challenge', 'custom'];
 const DIFFICULTY_ENUM = ['easy', 'medium', 'hard', 'expert'];
@@ -268,14 +268,15 @@ async function getProfileStats(req, res) {
         sessions.reduce((sum, session) => sum + (Number(session.wpm) || 0), 0) / sessions.length
     );
     const totalTimeMs = sessions.reduce((sum, session) => sum + (Number(session.timeTaken) || 0) * 1000, 0);
+    const { currentStreak, longestStreak } = calculateStreak(sessions);
 
     res.status(200).json({
         bestWpm,
         avgWpm,
         totalTests: sessions.length,
         totalTimeMs,
-        currentStreak: 0,
-        longestStreak: 0,
+        currentStreak,
+        longestStreak,
         achievements: []
     });
 }

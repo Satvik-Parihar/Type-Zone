@@ -1,4 +1,5 @@
 const RaceHistory = require('../models/RaceHistory');
+const { submitTypingSession } = require('../services/typingService');
 
 const rooms = new Map();
 const activeRaces = new Map();
@@ -156,7 +157,7 @@ function updatePlayerProgress(io, roomId, playerId, progress, wpm, accuracy) {
     // Check if all players finished
     const activePlayers = Array.from(room.players.values()).filter(p => !p.finished);
     if (activePlayers.length === 0) {
-      const result = finishRace(roomId);
+      const result = finishRace(io, roomId);
       if (result) {
         io.to(roomId).emit('race:finished', result);
         io.to(roomId).emit('room:updated', serializeRoom(room));
@@ -171,7 +172,7 @@ function updatePlayerProgress(io, roomId, playerId, progress, wpm, accuracy) {
   }
 }
 
-function finishRace(roomId) {
+function finishRace(io, roomId) {
   const room = rooms.get(roomId);
   if (!room) return;
 
@@ -213,6 +214,34 @@ function finishRace(roomId) {
       console.error(`Failed to persist race history for room ${roomId}:`, error.message);
       // Log the specific records that failed for debugging
       console.error('Failed records:', historyRecords);
+    });
+
+  Promise.allSettled(finishedPlayers.map((player) => submitTypingSession({
+    userId: player.id,
+    textId: `race-${room.id}`,
+    mode: 'time',
+    wpm: Number(player.wpm) || 0,
+    rawWpm: Number(player.wpm) || 0,
+    accuracy: Number(player.accuracy) || 0,
+    consistency: 100,
+    errorCount: 0,
+    timeTaken: Math.max(1, Number(player.finishTime) || 1),
+    rawInput: '',
+    keystrokeTimeline: [],
+    correctionPatterns: {
+      backspaceCorrections: 0,
+      replacedErrors: 0
+    },
+    keyMistakes: {}
+  })))
+    .then((results) => {
+      const savedCount = results.filter((result) => result.status === 'fulfilled').length;
+      if (savedCount > 0) {
+        io.to(roomId).emit('race:saved', { raceId: room.id, roomId });
+      }
+    })
+    .catch((error) => {
+      console.error(`Failed to save race sessions for room ${roomId}:`, error.message);
     });
 
   // Clean up active race data immediately

@@ -149,10 +149,20 @@ export const useTypingEngine = (text, mode = 'time', duration = 60) => {
     const charactersTyped = input.length;
     const wordsTyped = Math.max(0, input.trim().split(/\s+/).filter(Boolean).length);
     const minutes = Math.max(elapsedSeconds / 60, 0.01);
-    const wpm = Math.round((charactersTyped / 5) / minutes);
     const correctChars = Math.max(charactersTyped - errors.size, 0);
+    const rawWpm = Math.round((charactersTyped / 5) / minutes);
+    const wpm = Math.round((correctChars / 5) / minutes);
     const accuracy = charactersTyped > 0 ? Math.round((correctChars / charactersTyped) * 100) : 100;
     const timeLeft = mode === 'time' && isActive ? Math.max(duration - Math.round(elapsedSeconds), 0) : 0;
+    const history = wpmHistoryRef.current;
+    let consistency = 100;
+
+    if (history.length >= 3) {
+      const avg = history.reduce((sum, value) => sum + value, 0) / history.length;
+      const variance = history.reduce((sum, value) => sum + Math.pow(value - avg, 2), 0) / history.length;
+      const stdDev = Math.sqrt(variance);
+      consistency = Math.max(0, Math.round(100 - (stdDev / Math.max(avg, 1)) * 100));
+    }
 
     // derive key accuracy percentages
     const rawKeyAcc = keyAccuracyRef.current || {};
@@ -164,7 +174,9 @@ export const useTypingEngine = (text, mode = 'time', duration = 60) => {
 
     return {
       wpm: Number.isFinite(wpm) ? wpm : 0,
+      rawWpm: Number.isFinite(rawWpm) ? rawWpm : 0,
       accuracy,
+      consistency,
       errorCount: errors.size,
       correct: correctChars,
       time: Math.round(elapsedSeconds),

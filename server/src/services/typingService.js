@@ -50,27 +50,50 @@ function buildMistakeFrequency(keystrokeTimeline = [], keyMistakes = {}) {
 }
 
 function calculateStreak(allSessions = []) {
-    if (!Array.isArray(allSessions) || allSessions.length === 0) return 0;
+    if (!Array.isArray(allSessions) || allSessions.length === 0) {
+        return { currentStreak: 0, longestStreak: 0 };
+    }
 
-    const sortedDays = [...new Set(
-        allSessions
-            .map((session) => new Date(session.createdAt).toISOString().slice(0, 10))
-            .sort((a, b) => (a < b ? 1 : -1))
-    )].sort((a, b) => (a > b ? 1 : -1));
+    const days = [...new Set(
+        allSessions.map((session) => new Date(session.createdAt).toDateString())
+    )]
+        .map((day) => new Date(day))
+        .sort((a, b) => b - a);
 
+    let currentStreak = 0;
+    let longestStreak = 0;
     let streak = 1;
-    for (let index = sortedDays.length - 1; index > 0; index -= 1) {
-        const current = new Date(sortedDays[index]);
-        const previous = new Date(sortedDays[index - 1]);
-        const diff = Math.floor((current - previous) / (1000 * 60 * 60 * 24));
-        if (diff === 1) {
-            streak += 1;
-        } else {
-            break;
+    const today = new Date().toDateString();
+    const yesterday = new Date(Date.now() - 86400000).toDateString();
+
+    if (days[0].toDateString() !== today && days[0].toDateString() !== yesterday) {
+        currentStreak = 0;
+    } else {
+        currentStreak = 1;
+        for (let i = 1; i < days.length; i += 1) {
+            const diff = (days[i - 1] - days[i]) / 86400000;
+            if (Math.round(diff) === 1) {
+                currentStreak += 1;
+            } else {
+                break;
+            }
         }
     }
 
-    return streak;
+    streak = 1;
+    for (let i = 1; i < days.length; i += 1) {
+        const diff = (days[i - 1] - days[i]) / 86400000;
+        if (Math.round(diff) === 1) {
+            streak += 1;
+            longestStreak = Math.max(longestStreak, streak);
+        } else {
+            streak = 1;
+        }
+    }
+
+    longestStreak = Math.max(longestStreak, currentStreak);
+
+    return { currentStreak, longestStreak };
 }
 
 async function checkAchievements(userId, session, allSessions) {
@@ -88,9 +111,9 @@ async function checkAchievements(userId, session, allSessions) {
     if (allSessions.length >= 10) toAward.push('sessions-10');
     if (allSessions.length >= 100) toAward.push('sessions-100');
 
-    const streak = calculateStreak(allSessions);
-    if (streak >= 7) toAward.push('streak-7');
-    if (streak >= 30) toAward.push('streak-30');
+    const { currentStreak } = calculateStreak(allSessions);
+    if (currentStreak >= 7) toAward.push('streak-7');
+    if (currentStreak >= 30) toAward.push('streak-30');
 
     const user = await User.findById(userId);
     if (!user) return [];

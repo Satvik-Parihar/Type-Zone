@@ -41,11 +41,7 @@ export default function RacePage() {
   const [raceStarted, setRaceStarted] = useState(false);
   const [raceFinished, setRaceFinished] = useState(false);
   const [raceText, setRaceText] = useState('');
-  const [players, setPlayers] = useState([
-    { id: '1', name: 'You', charactersTyped: 0, wpm: 0, accuracy: 100, finished: false, finishTime: 0 },
-    { id: '2', name: 'Player2', charactersTyped: 0, wpm: 0, accuracy: 100, finished: false, finishTime: 0 },
-    { id: '3', name: 'Player3', charactersTyped: 0, wpm: 0, accuracy: 100, finished: false, finishTime: 0 }
-  ]);
+  const [players, setPlayers] = useState([]);
   const [countdown, setCountdown] = useState(3);
 
   const {
@@ -70,6 +66,7 @@ export default function RacePage() {
       setRaceText(data.text || RACE_TEXT);
       setRaceStarted(true);
       setCountdown(3);
+      setPlayers(Array.isArray(data.players) ? data.players : []);
     };
 
     const handleRaceCountdown = (count) => {
@@ -104,55 +101,18 @@ export default function RacePage() {
     };
   }, [socket, roomId]);
 
-  // Simulate other players progressing and send updates via socket
   useEffect(() => {
     if (!raceStarted) return;
 
-    const startTime = Date.now();
-    const interval = setInterval(() => {
-      setPlayers(prev => {
-        const updated = prev.map((p, idx) => {
-          if (idx === 0) {
-            return { 
-              ...p, 
-              charactersTyped: currentIndex, 
-              wpm: metrics.wpm || 0, 
-              accuracy: metrics.accuracy || 100,
-              finished: isFinished,
-              finishTime: isFinished ? (Date.now() - startTime) / 1000 : 0
-            };
-          }
-          if (!p.finished) {
-            const progress = Math.min(p.charactersTyped + Math.random() * 3, (raceText || RACE_TEXT).length);
-            const finished = progress >= (raceText || RACE_TEXT).length;
-            return {
-              ...p,
-              charactersTyped: progress,
-              wpm: Math.round(Math.random() * 100 + 60),
-              accuracy: Math.round(Math.random() * 20 + 80),
-              finished: finished,
-              finishTime: finished ? (Date.now() - startTime) / 1000 : 0
-            };
-          }
-          return p;
-        });
-
-        // Send progress update to socket
-        if (socket && roomId) {
-          socket.emit(playerEvents.UPDATE_PROGRESS, {
-            roomId,
-            progress: (currentIndex / (raceText || RACE_TEXT).length) * 100,
-            wpm: metrics.wpm || 0,
-            accuracy: metrics.accuracy || 100
-          });
-        }
-
-        return updated;
+    if (socket && roomId) {
+      socket.emit(playerEvents.UPDATE_PROGRESS, {
+        roomId,
+        progress: (currentIndex / (raceText || RACE_TEXT).length) * 100,
+        wpm: metrics.wpm || 0,
+        accuracy: metrics.accuracy || 100
       });
-    }, 300);
-
-    return () => clearInterval(interval);
-  }, [raceStarted, currentIndex, metrics, isFinished, socket, roomId, raceText]);
+    }
+  }, [raceStarted, currentIndex, metrics, socket, roomId, raceText]);
 
   // Race countdown
   useEffect(() => {
@@ -206,14 +166,20 @@ export default function RacePage() {
 
         {/* Race Tracks */}
         <div className="mb-12 space-y-4">
-          {players.map((player, idx) => (
-            <PlayerTrack
-              key={player.id}
-              player={player}
-              raceText={raceText || RACE_TEXT}
-              isCurrentUser={idx === 0}
-            />
-          ))}
+          {players.length === 0 ? (
+            <div className="card p-8 text-center text-text-secondary">
+              Waiting for race to start...
+            </div>
+          ) : (
+            players.map((player, idx) => (
+              <PlayerTrack
+                key={player.id}
+                player={player}
+                raceText={raceText || RACE_TEXT}
+                isCurrentUser={idx === 0}
+              />
+            ))
+          )}
         </div>
 
         {/* Countdown */}
@@ -293,7 +259,7 @@ export default function RacePage() {
               </motion.div>
               <h2 className="text-3xl font-bold text-text mb-2">Race Completed!</h2>
               <p className="text-text-secondary">
-                {players[0].finished ? 'You won the race!' : 'Better luck next time!'}
+                {players[0]?.finished ? 'You won the race!' : 'Better luck next time!'}
               </p>
             </div>
 
@@ -311,11 +277,11 @@ export default function RacePage() {
                 </div>
                 <div className="text-center">
                   <p className="text-text-secondary text-sm mb-2">Errors</p>
-                  <p className="text-3xl font-bold text-error">{metrics.errors || 0}</p>
+                  <p className="text-3xl font-bold text-error">{metrics.errorCount || 0}</p>
                 </div>
                 <div className="text-center">
                   <p className="text-text-secondary text-sm mb-2">Time</p>
-                  <p className="text-3xl font-bold text-text">{Math.round((metrics.time || 0) / 1000)}s</p>
+                  <p className="text-3xl font-bold text-text">{Math.round(metrics.time || 0)}s</p>
                 </div>
               </div>
             </div>

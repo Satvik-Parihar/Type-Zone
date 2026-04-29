@@ -10,12 +10,15 @@ import LobbyPage from './pages/LobbyPage';
 import RoomPage from './pages/RoomPage';
 import RacePage from './pages/RacePage';
 import NotFoundPage from './pages/NotFoundPage';
+import { SkeletonCard } from './ui/SkeletonLoader';
 
 const LeaderboardPage = lazy(() => import('./pages/LeaderboardPage'));
 const ProfilePage = lazy(() => import('./pages/ProfilePage'));
 
 const PageFallback = () => (
-  <div className="min-h-[50vh] flex items-center justify-center text-text-secondary">Loading...</div>
+  <div className="max-w-4xl mx-auto px-4 py-16">
+    <SkeletonCard />
+  </div>
 );
 
 export default function App() {

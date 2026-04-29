@@ -196,16 +196,26 @@ const ResultsScreen = ({ metrics, text, onNewTest, onRetry }) => {
 
   const renderSparkline = (data = []) => {
     if (!data.length) return null;
-    const max = Math.max(...data, 100);
-    const points = data.map((v, i) => {
-      const x = (i / (data.length - 1)) * 100;
+    const max = Math.max(...data, 1);
+    const pts = data.map((v, i) => {
+      const x = (i / Math.max(data.length - 1, 1)) * 100;
       const y = 100 - (v / max) * 100;
       return `${x},${y}`;
     }).join(' ');
+    const first = '0,100';
+    const last = '100,100';
+    const area = `${first} ${pts} ${last}`;
 
     return (
       <svg className="w-full h-20" viewBox="0 0 100 100" preserveAspectRatio="none">
-        <polyline points={points} fill="none" stroke="currentColor" strokeWidth="2" className="text-accent" />
+        <defs>
+          <linearGradient id="spark-fill" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="var(--color-accent)" stopOpacity="0.3" />
+            <stop offset="100%" stopColor="var(--color-accent)" stopOpacity="0" />
+          </linearGradient>
+        </defs>
+        <polygon points={area} fill="url(#spark-fill)" />
+        <polyline points={pts} fill="none" stroke="var(--color-accent)" strokeWidth="2" strokeLinejoin="round" />
       </svg>
     );
   };
@@ -232,14 +242,22 @@ const ResultsScreen = ({ metrics, text, onNewTest, onRetry }) => {
           </div>
           <div>
             <p className="text-text-secondary text-sm mb-2">Summary</p>
-            <div className="flex gap-4">
+            <div className="grid grid-cols-2 gap-4">
               <div className="text-center">
                 <p className="text-xs text-text-secondary uppercase tracking-widest mb-1">WPM</p>
                 <p className="text-3xl font-bold text-accent">{Math.round(metrics.wpm || 0)}</p>
               </div>
               <div className="text-center">
+                <p className="text-xs text-text-secondary uppercase tracking-widest mb-1">Raw WPM</p>
+                <p className="text-3xl font-bold text-text">{Math.round(metrics.rawWpm || 0)}</p>
+              </div>
+              <div className="text-center">
                 <p className="text-xs text-text-secondary uppercase tracking-widest mb-1">Accuracy</p>
                 <p className="text-3xl font-bold text-correct">{Math.round(metrics.accuracy || 100)}%</p>
+              </div>
+              <div className="text-center">
+                <p className="text-xs text-text-secondary uppercase tracking-widest mb-1">Consistency</p>
+                <p className="text-3xl font-bold text-text-secondary">{Math.round(metrics.consistency || 100)}%</p>
               </div>
               <div className="text-center">
                 <p className="text-xs text-text-secondary uppercase tracking-widest mb-1">Errors</p>
@@ -350,6 +368,19 @@ export default function TypingArea({
     prevErrorCountRef.current = currentErrorCount;
   }, [input.length, errors.size, isActive, settings]);
 
+  useEffect(() => {
+    const handler = (event) => {
+      if (event.key === 'Tab' && !event.ctrlKey && !event.metaKey) {
+        event.preventDefault();
+        resetTest();
+        inputRef.current?.focus();
+      }
+    };
+
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [resetTest, inputRef]);
+
   // Reset error tracking when test is reset
   useEffect(() => {
     if (!isActive && !isFinished) {
@@ -373,10 +404,38 @@ export default function TypingArea({
     resetTest();
   }, [resetTest]);
 
+  const buildGeneratedText = useCallback(() => {
+    if (selectedMode === 'quote') {
+      return generatePrompt('quote', selectedWordCount, 'english');
+    }
+
+    if (selectedMode === 'code') {
+      return generatePrompt('code', selectedWordCount, codeLang);
+    }
+
+    if (selectedMode === 'numbers') {
+      return generatePrompt('numbers', selectedWordCount, 'english');
+    }
+
+    if (selectedMode === 'custom') {
+      return customText || '';
+    }
+
+    if (selectedMode === 'zen') {
+      return generatePrompt('paragraph', 200, 'english');
+    }
+
+    if (selectedMode === 'words') {
+      return generatePrompt('words', selectedWordCount, 'english');
+    }
+
+    return generatePrompt('time', Math.max(selectedWordCount, 120), 'english');
+  }, [codeLang, customText, selectedMode, selectedWordCount]);
+
   const handleNewTest = useCallback(() => {
     resetTest();
-    setTestText(text);
-  }, [resetTest, text]);
+    setTestText(buildGeneratedText());
+  }, [buildGeneratedText, resetTest]);
 
   const handleRetry = useCallback(() => {
     resetTest();
@@ -387,31 +446,14 @@ export default function TypingArea({
       if (settings.soundEnabled) {
         playSound('complete');
       }
-      onComplete({ ...metrics, isFinished: true });
+      onComplete({ ...metrics, isFinished: true, mode: selectedMode });
     }
-  }, [isFinished, metrics, onComplete, settings]);
+  }, [isFinished, metrics, onComplete, settings, selectedMode]);
 
   // Generate content when mode changes
   useEffect(() => {
-    if (selectedMode === 'quote') {
-      setTestText(generatePrompt('quote', selectedWordCount, 'english'));
-    } else if (selectedMode === 'code') {
-      setTestText(generatePrompt('code', selectedWordCount, codeLang));
-    } else if (selectedMode === 'numbers') {
-      setTestText(generatePrompt('numbers', selectedWordCount, 'english'));
-    } else if (selectedMode === 'custom') {
-      setTestText(customText || '');
-    } else if (selectedMode === 'zen') {
-      setTestText(generatePrompt('paragraph', 200, 'english'));
-    } else {
-      // time/words default
-      if (selectedMode === 'words') {
-        setTestText(generatePrompt('words', selectedWordCount, 'english'));
-      } else {
-        setTestText(generatePrompt('time', Math.max(selectedWordCount, 120), 'english'));
-      }
-    }
-  }, [selectedMode, selectedWordCount, selectedDuration, codeLang, customText]);
+    setTestText(buildGeneratedText());
+  }, [buildGeneratedText, selectedDuration]);
 
   const characters = useMemo(() => testText.split(''), [testText]);
   const tokens = useMemo(() => {
@@ -528,6 +570,12 @@ export default function TypingArea({
             startTest();
           }}
         />
+      )}
+
+      {showModeSelector && (
+        <p className="text-center text-xs text-text-secondary mb-4 opacity-60">
+          Tab — restart · Esc — stop
+        </p>
       )}
 
       {/* Live metrics bar */}

@@ -23,11 +23,17 @@ export default function SettingsPanel({ isOpen, onClose }) {
       matchWordBoundaries: true,
     };
   });
+  const [soundOn, setSoundOn] = useState(() => settings.soundEnabled !== false);
 
   const handleSettingChange = (key, value) => {
     const updated = { ...settings, [key]: value };
     setSettings(updated);
     localStorage.setItem('typezone_settings', JSON.stringify(updated));
+  };
+
+  const toggleSound = (value) => {
+    setSoundOn(value);
+    handleSettingChange('soundEnabled', value);
   };
 
   if (!isOpen) return null;
@@ -93,15 +99,25 @@ export default function SettingsPanel({ isOpen, onClose }) {
               <h3 className="text-lg font-bold text-[var(--color-text)]">Sound</h3>
             </div>
             <div className="space-y-3">
-              <label className="flex items-center gap-3 cursor-pointer p-3 rounded-lg hover:bg-[var(--color-card)]">
-                <input
-                  type="checkbox"
-                  checked={settings.soundEnabled}
-                  onChange={(e) => handleSettingChange('soundEnabled', e.target.checked)}
-                  className="w-5 h-5 cursor-pointer"
-                />
-                <span className="text-[var(--color-text)]">Enable Sound Effects</span>
-              </label>
+              <div className="flex items-center justify-between py-3 border-b border-[var(--color-border)]">
+                <div>
+                  <p className="text-sm font-medium text-[var(--color-text)]">Sound effects</p>
+                  <p className="text-xs text-[var(--color-text-secondary)]">Keypress, error, and completion sounds</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => toggleSound(!soundOn)}
+                  className={`relative w-11 h-6 rounded-full transition-colors ${
+                    soundOn ? 'bg-[var(--color-accent)]' : 'bg-[var(--color-surface)] border border-[var(--color-border)]'
+                  }`}
+                >
+                  <span
+                    className={`absolute top-1 w-4 h-4 bg-[var(--color-background)] rounded-full transition-transform ${
+                      soundOn ? 'translate-x-6' : 'translate-x-1'
+                    }`}
+                  />
+                </button>
+              </div>
               <label className="flex items-center gap-3 cursor-pointer p-3 rounded-lg hover:bg-[var(--color-card)]">
                 <input
                   type="checkbox"

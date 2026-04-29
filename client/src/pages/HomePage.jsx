@@ -101,6 +101,10 @@ export default function HomePage() {
         >
           <h1 className="text-6xl md:text-7xl font-bold text-text mb-6">
             type <span className="text-accent">faster</span>
+            <span
+              className="text-accent ml-1"
+              style={{ animation: 'blink 1s step-end infinite' }}
+            >.</span>
           </h1>
           <p className="text-xl text-text-secondary max-w-2xl mx-auto mb-8">
             The next-generation typing platform. Test your speed, track your progress, and compete with the world.

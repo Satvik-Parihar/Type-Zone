@@ -1,10 +1,78 @@
 import { useState, useEffect, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { BarChart3, Clock, Target, Trophy, Award, TrendingUp } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import api from '../utils/api';
 import { SkeletonCard, SkeletonTable } from '../ui/SkeletonLoader';
+import { useAuth } from '../context/AuthContext';
+
+function ActivityCalendar({ sessions }) {
+  const today = new Date();
+  const weeks = 52;
+  const days = weeks * 7;
+  const startDate = new Date(today);
+  startDate.setDate(today.getDate() - days + 1);
+
+  const countByDay = {};
+  sessions.forEach((session) => {
+    const day = new Date(session.createdAt).toDateString();
+    countByDay[day] = (countByDay[day] || 0) + 1;
+  });
+
+  const cells = Array.from({ length: days }, (_, index) => {
+    const date = new Date(startDate);
+    date.setDate(startDate.getDate() + index);
+    return { date, count: countByDay[date.toDateString()] || 0 };
+  });
+
+  const getColor = (count) => {
+    if (count === 0) return 'var(--color-surface)';
+    if (count <= 2) return 'color-mix(in srgb, var(--color-accent) 30%, transparent)';
+    if (count <= 5) return 'color-mix(in srgb, var(--color-accent) 60%, transparent)';
+    return 'var(--color-accent)';
+  };
+
+  const weekCols = [];
+  for (let week = 0; week < weeks; week += 1) {
+    weekCols.push(cells.slice(week * 7, week * 7 + 7));
+  }
+
+  return (
+    <div className="card p-6 mt-6">
+      <h3 className="text-lg font-semibold text-text mb-4">Activity</h3>
+      <div className="flex gap-1 overflow-x-auto pb-2">
+        {weekCols.map((week, weekIndex) => (
+          <div key={weekIndex} className="flex flex-col gap-1">
+            {week.map((cell, dayIndex) => (
+              <div
+                key={dayIndex}
+                className="w-3 h-3 rounded-sm border border-border/30"
+                style={{ background: getColor(cell.count) }}
+                title={`${cell.date.toDateString()}: ${cell.count} session${cell.count !== 1 ? 's' : ''}`}
+              />
+            ))}
+          </div>
+        ))}
+      </div>
+      <div className="flex items-center gap-2 mt-3 text-xs text-text-secondary">
+        <span>Less</span>
+        {[0, 2, 4, 6, 8].map((value) => (
+          <div
+            key={value}
+            className="w-3 h-3 rounded-sm border border-border/30"
+            style={{ background: getColor(value) }}
+          />
+        ))}
+        <span>More</span>
+      </div>
+    </div>
+  );
+}
 
 export default function ProfilePage() {
+  const { user, loading: authLoading } = useAuth();
+  const navigate = useNavigate();
   const [profile, setProfile] = useState({
     bestWpm: 0,
     avgWpm: 0,
@@ -26,6 +94,14 @@ export default function ProfilePage() {
   ];
 
   useEffect(() => {
+    if (!authLoading && !user) {
+      navigate('/login', { replace: true, state: { from: '/profile' } });
+    }
+  }, [user, authLoading, navigate]);
+
+  useEffect(() => {
+    if (!user) return;
+
     const fetchProfile = async () => {
       try {
         const [statsRes, sessionsRes] = await Promise.all([
@@ -51,7 +127,10 @@ export default function ProfilePage() {
     };
 
     fetchProfile();
-  }, []);
+  }, [user]);
+
+  if (authLoading) return <SkeletonCard />;
+  if (!user) return null;
 
   const formatTime = (ms) => {
     const hours = Math.floor(ms / 3600000);
@@ -219,13 +298,65 @@ export default function ProfilePage() {
 
   const TabContent = {
     overview: () => (
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <StatCard icon={TrendingUp} label="Best WPM" value={Math.round(profile.bestWpm)} />
-        <StatCard icon={Target} label="Average WPM" value={Math.round(profile.avgWpm)} />
-        <StatCard icon={BarChart3} label="Total Tests" value={profile.totalTests} />
-        <StatCard icon={Clock} label="Total Time" value={formatTime(profile.totalTimeMs)} />
-        <StatCard icon={Trophy} label="Current Streak" value={profile.currentStreak} unit="days" />
-        <StatCard icon={Award} label="Longest Streak" value={profile.longestStreak} unit="days" />
+      <div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <StatCard icon={TrendingUp} label="Best WPM" value={Math.round(profile.bestWpm)} />
+          <StatCard icon={Target} label="Average WPM" value={Math.round(profile.avgWpm)} />
+          <StatCard icon={BarChart3} label="Total Tests" value={profile.totalTests} />
+          <StatCard icon={Clock} label="Total Time" value={formatTime(profile.totalTimeMs)} />
+          <StatCard icon={Trophy} label="Current Streak" value={profile.currentStreak} unit="days" />
+          <StatCard icon={Award} label="Longest Streak" value={profile.longestStreak} unit="days" />
+        </div>
+
+        {analytics.recentWpm.length > 1 && (
+          <div className="card p-6 mt-6">
+            <h3 className="text-lg font-semibold text-text mb-4">WPM over last 20 sessions</h3>
+            <ResponsiveContainer width="100%" height={200}>
+              <LineChart data={analytics.recentWpm}>
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
+                <XAxis
+                  dataKey="test"
+                  tick={{ fill: 'var(--color-text-secondary)', fontSize: 11 }}
+                  label={{
+                    value: 'Session',
+                    position: 'insideBottom',
+                    offset: -2,
+                    fill: 'var(--color-text-secondary)',
+                    fontSize: 11,
+                  }}
+                />
+                <YAxis tick={{ fill: 'var(--color-text-secondary)', fontSize: 11 }} />
+                <Tooltip
+                  contentStyle={{
+                    background: 'var(--color-card)',
+                    border: '1px solid var(--color-border)',
+                    borderRadius: 8,
+                    color: 'var(--color-text)'
+                  }}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="wpm"
+                  stroke="var(--color-accent)"
+                  strokeWidth={2}
+                  dot={{ r: 3, fill: 'var(--color-accent)' }}
+                  activeDot={{ r: 5 }}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="accuracy"
+                  stroke="var(--color-correct)"
+                  strokeWidth={1.5}
+                  dot={false}
+                  strokeDasharray="4 2"
+                />
+              </LineChart>
+            </ResponsiveContainer>
+            <p className="text-xs text-text-secondary mt-2">Solid = WPM · Dashed = Accuracy %</p>
+          </div>
+        )}
+
+        <ActivityCalendar sessions={sessions} />
       </div>
     ),
 

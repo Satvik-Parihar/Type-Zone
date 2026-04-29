@@ -1,28 +1,14 @@
-import { useState, useCallback } from 'react';
+import { useCallback } from 'react';
 import TypingArea from '../components/TypingArea';
 import api from '../utils/api';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 
-const TEST_TEXTS = [
-  'the quick brown fox jumps over the lazy dog several times each day under the bright sun',
-  'in the age of technology innovation drives progress and shapes the future of humanity',
-  'practice makes perfect and consistency is the key to mastering any skill over time',
-  'typing speed is not just about velocity but also about accuracy and maintaining focus',
-  'every character matters and attention to detail separates good typists from great ones',
-];
-
 export default function TypingPage() {
-  const [testText, setTestText] = useState(TEST_TEXTS[0]);
-  const [currentMode, setCurrentMode] = useState('time');
-  const [currentDuration, setCurrentDuration] = useState(60);
-  const [testResults, setTestResults] = useState(null);
   const { user } = useAuth();
   const toast = useToast();
 
   const handleTestComplete = useCallback(async (metrics) => {
-    setTestResults(metrics);
-
     if (!user) {
       return;
     }
@@ -30,19 +16,19 @@ export default function TypingPage() {
     try {
       const { data } = await api.post('/typing/sessions', {
         textId: 'practice-generated',
-        mode: currentMode,
+        mode: metrics.mode || 'time',
         wpm: metrics.wpm,
-        rawWpm: metrics.rawWpm,
+        rawWpm: metrics.rawWpm || 0,
         accuracy: metrics.accuracy,
-        consistency: metrics.consistency,
-        errorCount: metrics.errors,
+        consistency: metrics.consistency || 100,
+        errorCount: metrics.errorCount || 0,
         timeTaken: metrics.time,
-        keystrokesPerSecond: metrics.kps,
+        keystrokesPerSecond: metrics.keystrokesPerSecond || 0,
         wpmHistory: metrics.wpmHistory || [],
         keyAccuracy: metrics.keyAccuracy || {},
         keystrokeTimeline: metrics.keystrokeTimeline || []
       });
-      toast.success('Session saved to your profile');
+      toast.success('Session saved');
 
       if (Array.isArray(data?.newAchievements)) {
         data.newAchievements.forEach((achievement) => {
@@ -50,25 +36,14 @@ export default function TypingPage() {
         });
       }
     } catch (error) {
-      toast.warning('Session finished, but could not be saved');
+      toast.warning('Could not save session');
     }
-  }, [currentMode, toast, user]);
-
-  const handleNewTest = useCallback(() => {
-    const randomText = TEST_TEXTS[Math.floor(Math.random() * TEST_TEXTS.length)];
-    setTestText(randomText);
-    setTestResults(null);
-  }, []);
+  }, [toast, user]);
 
   return (
     <div className="min-h-screen bg-background pt-24 pb-12">
       <div className="max-w-5xl mx-auto px-4">
-        <TypingArea
-          text={testText}
-          mode={currentMode}
-          duration={currentDuration}
-          onComplete={handleTestComplete}
-        />
+        <TypingArea onComplete={handleTestComplete} />
       </div>
     </div>
   );
