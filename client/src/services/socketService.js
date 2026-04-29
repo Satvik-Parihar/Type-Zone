@@ -24,11 +24,11 @@ export function initializeSocket(token) {
     });
 
     socket.on('connect', () => {
-        console.log('Socket connected');
+        // Socket connected
     });
 
     socket.on('disconnect', () => {
-        console.log('Socket disconnected');
+        // Socket disconnected
     });
 
     return socket;

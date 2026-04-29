@@ -389,6 +389,15 @@ export default function TypingArea({
     }
   }, [isActive, isFinished]);
 
+  // Watch for external text changes (e.g. homepage rotating testWords)
+  useEffect(() => {
+    if (text && text !== testText) {
+      setTestText(text);
+      resetTest();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [text]);
+
   const handleModeChange = useCallback((newMode) => {
     setSelectedMode(newMode);
     resetTest();

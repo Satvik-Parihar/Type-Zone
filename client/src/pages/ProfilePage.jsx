@@ -428,9 +428,11 @@ export default function ProfilePage() {
         <div className="flex justify-between items-center mb-6">
           <div className="flex items-center gap-3">
             <h3 className="text-lg font-semibold text-text">Recent Tests</h3>
-            <button onClick={exportCSV} className="btn-ghost text-sm px-3 py-1">
-              Export CSV
-            </button>
+            {sessions.length > 0 && (
+              <button onClick={exportCSV} className="btn-ghost text-sm px-3 py-1">
+                Export CSV
+              </button>
+            )}
           </div>
           <p className="text-sm text-text-secondary">{sessions.length} tests</p>
         </div>
