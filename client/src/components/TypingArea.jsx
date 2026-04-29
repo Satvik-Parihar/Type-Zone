@@ -1,10 +1,12 @@
-import { useEffect, useMemo, useState, useRef, useCallback } from 'react';
+import { useEffect, useMemo, useState, useRef, useCallback, useLayoutEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { RotateCcw, Zap, Target } from 'lucide-react';
 import { useTypingEngine } from '../hooks/useTypingEngine';
+import { generatePrompt } from '../utils/typingData';
+import { playSound } from '../utils/sounds';
 
 // Character token component
-const CharacterToken = ({ char, status }) => {
+const CharacterToken = ({ char, status, innerRef }) => {
   let className = 'relative inline w-auto text-2xl leading-relaxed font-mono tracking-wider ';
   
   if (status === 'correct') {
@@ -18,19 +20,26 @@ const CharacterToken = ({ char, status }) => {
   }
 
   return (
-    <span className={className}>
+    <span ref={innerRef} className={className}>
       {char === ' ' ? '\u00A0' : char}
     </span>
   );
 };
 
-// Animated cursor beam
-const CursorBeam = ({ isActive }) => (
+// Animated cursor beam positioned to follow current character
+const CursorBeam = ({ isActive, left = 0, top = 0, height = 24 }) => (
   isActive ? (
     <motion.div
-      className="absolute top-0 h-full w-0.5 bg-cursor shadow-[0_0_8px_var(--color-cursor)]"
-      animate={{ opacity: [1, 0.3, 1] }}
-      transition={{ duration: 1, repeat: Infinity }}
+      className="absolute bg-cursor shadow-[0_0_12px_var(--color-accent)]"
+      style={{ 
+        width: 2, 
+        left, 
+        top, 
+        height,
+        boxShadow: '0 0 12px var(--color-accent), 0 0 6px var(--color-accent, rgba(92, 225, 230, 0.6))',
+      }}
+      animate={{ opacity: [1, 0.4, 1], boxShadow: ['0 0 12px var(--color-accent)', '0 0 20px var(--color-accent)', '0 0 12px var(--color-accent)'] }}
+      transition={{ duration: 1.2, repeat: Infinity, ease: 'easeInOut' }}
     />
   ) : null
 );
@@ -60,42 +69,120 @@ const WPMSparkline = ({ wpmHistory = [] }) => {
 };
 
 // Mode selector
-const ModeSelector = ({ mode, duration, wordCount, onModeChange, onDurationChange, onWordCountChange }) => {
+const ModeSelector = ({
+  mode,
+  duration,
+  wordCount,
+  onModeChange,
+  onDurationChange,
+  onWordCountChange,
+  codeLang,
+  onCodeLangChange,
+  customText,
+  onCustomChange,
+  onCustomStart,
+}) => {
   return (
-    <div className="flex flex-wrap justify-center gap-2 mb-8">
-      {[15, 30, 60, 120].map(time => (
+    <div className="mb-6">
+      <div className="flex flex-wrap justify-center gap-2 mb-4">
+        {[15, 30, 60, 120].map(time => (
+          <button
+            key={`time-${time}`}
+            onClick={() => {
+              onModeChange('time');
+              onDurationChange(time);
+            }}
+            className={`badge transition-all ${
+              mode === 'time' && duration === time
+                ? 'bg-accent text-background border-accent'
+                : 'bg-surface border-border hover:border-accent'
+            }`}
+          >
+            {time}s
+          </button>
+        ))}
+
+        {[10, 25, 50, 100].map(count => (
+          <button
+            key={`words-${count}`}
+            onClick={() => {
+              onModeChange('words');
+              onWordCountChange(count);
+            }}
+            className={`badge transition-all ${
+              mode === 'words' && wordCount === count
+                ? 'bg-accent text-background border-accent'
+                : 'bg-surface border-border hover:border-accent'
+            }`}
+          >
+            {count} words
+          </button>
+        ))}
+
         <button
-          key={`time-${time}`}
-          onClick={() => {
-            onModeChange('time');
-            onDurationChange(time);
-          }}
-          className={`badge transition-all ${
-            mode === 'time' && duration === time
-              ? 'bg-accent text-background border-accent'
-              : 'bg-surface border-border hover:border-accent'
-          }`}
+          onClick={() => onModeChange('quote')}
+          className={`badge ${mode === 'quote' ? 'bg-accent text-background' : 'bg-surface border-border'}`}
         >
-          {time}s
+          Quote
         </button>
-      ))}
-      
-      {[10, 25, 50, 100].map(count => (
+
         <button
-          key={`words-${count}`}
-          onClick={() => {
-            onModeChange('words');
-            onWordCountChange(count);
-          }}
-          className={`badge transition-all ${
-            mode === 'words' && wordCount === count
-              ? 'bg-accent text-background border-accent'
-              : 'bg-surface border-border hover:border-accent'
-          }`}
+          onClick={() => onModeChange('code')}
+          className={`badge ${mode === 'code' ? 'bg-accent text-background' : 'bg-surface border-border'}`}
         >
-          {count} words
+          Code
         </button>
-      ))}
+
+        <button
+          onClick={() => onModeChange('numbers')}
+          className={`badge ${mode === 'numbers' ? 'bg-accent text-background' : 'bg-surface border-border'}`}
+        >
+          Numbers
+        </button>
+
+        <button
+          onClick={() => onModeChange('custom')}
+          className={`badge ${mode === 'custom' ? 'bg-accent text-background' : 'bg-surface border-border'}`}
+        >
+          Custom
+        </button>
+
+        <button
+          onClick={() => onModeChange('zen')}
+          className={`badge ${mode === 'zen' ? 'bg-accent text-background' : 'bg-surface border-border'}`}
+        >
+          Zen
+        </button>
+      </div>
+
+      {mode === 'code' && (
+        <div className="flex justify-center gap-2 mb-4">
+          {['javascript', 'python', 'go'].map((lang) => (
+            <button
+              key={lang}
+              onClick={() => onCodeLangChange(lang)}
+              className={`badge ${codeLang === lang ? 'bg-accent text-background' : 'bg-surface border-border'}`}
+            >
+              {lang.toUpperCase()}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {mode === 'custom' && (
+        <div className="flex flex-col items-center gap-2">
+          <textarea
+            placeholder="Paste custom text here"
+            value={customText}
+            onChange={(e) => onCustomChange(e.target.value)}
+            className="w-full max-w-2xl p-3 bg-surface border border-border rounded-md text-text"
+            rows={4}
+          />
+          <div>
+            <button onClick={() => onCustomStart()} className="btn-primary">Start</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -192,11 +279,37 @@ const ResultsScreen = ({ metrics, text, onNewTest, onRetry }) => {
 };
 
 // Main TypingArea component
-export default function TypingArea({ text = '', mode = 'time', duration = 60, onComplete, minimal = false }) {
+export default function TypingArea({
+  text = '',
+  mode = 'time',
+  duration = 60,
+  onComplete,
+  minimal = false,
+  showModeSelector = true,
+  showActionButtons = true,
+}) {
   const [selectedMode, setSelectedMode] = useState(mode);
   const [selectedDuration, setSelectedDuration] = useState(duration);
   const [selectedWordCount, setSelectedWordCount] = useState(25);
   const [testText, setTestText] = useState(text);
+  const [codeLang, setCodeLang] = useState('javascript');
+  const [customText, setCustomText] = useState('');
+  const [outerHeight, setOuterHeight] = useState(120); // pixels for 3 lines default
+  const [translateY, setTranslateY] = useState(0);
+  const [cursorPos, setCursorPos] = useState({ left: 0, top: 0, height: 24 });
+  
+  // Load sound settings from localStorage
+  const [settings] = useState(() => {
+    const saved = localStorage.getItem('typezone_settings');
+    return saved ? JSON.parse(saved) : {
+      soundEnabled: true,
+      keypressSoundEnabled: true,
+      volume: 70,
+    };
+  });
+  
+  const prevErrorCountRef = useRef(0);
+  const prevInputLenRef = useRef(0);
 
   const {
     input,
@@ -207,9 +320,43 @@ export default function TypingArea({ text = '', mode = 'time', duration = 60, on
     metrics,
     startTest,
     resetTest,
-    handleInput,
+    handleInput: baseHandleInput,
     inputRef,
   } = useTypingEngine(testText, selectedMode, selectedDuration);
+  
+  // Wrapped input handler with sound integration
+  const handleInput = useCallback((value) => {
+    baseHandleInput(value);
+    prevInputLenRef.current = value.length;
+  }, [baseHandleInput]);
+  
+  // Play sounds on error detection or keypress via effect
+  useEffect(() => {
+    if (!isActive) return;
+    
+    const currentErrorCount = errors.size;
+    const inputIncremented = input.length > prevInputLenRef.current;
+    
+    // Play keypress sound when character typed
+    if (settings.soundEnabled && settings.keypressSoundEnabled && inputIncremented) {
+      playSound('keypress');
+    }
+    
+    // Play error sound when new errors detected
+    if (settings.soundEnabled && currentErrorCount > prevErrorCountRef.current) {
+      playSound('error');
+    }
+    
+    prevErrorCountRef.current = currentErrorCount;
+  }, [input.length, errors.size, isActive, settings]);
+
+  // Reset error tracking when test is reset
+  useEffect(() => {
+    if (!isActive && !isFinished) {
+      prevErrorCountRef.current = 0;
+      prevInputLenRef.current = 0;
+    }
+  }, [isActive, isFinished]);
 
   const handleModeChange = useCallback((newMode) => {
     setSelectedMode(newMode);
@@ -237,9 +384,34 @@ export default function TypingArea({ text = '', mode = 'time', duration = 60, on
 
   useEffect(() => {
     if (isFinished && onComplete) {
+      if (settings.soundEnabled) {
+        playSound('complete');
+      }
       onComplete({ ...metrics, isFinished: true });
     }
-  }, [isFinished, metrics, onComplete]);
+  }, [isFinished, metrics, onComplete, settings]);
+
+  // Generate content when mode changes
+  useEffect(() => {
+    if (selectedMode === 'quote') {
+      setTestText(generatePrompt('quote', selectedWordCount, 'english'));
+    } else if (selectedMode === 'code') {
+      setTestText(generatePrompt('code', selectedWordCount, codeLang));
+    } else if (selectedMode === 'numbers') {
+      setTestText(generatePrompt('numbers', selectedWordCount, 'english'));
+    } else if (selectedMode === 'custom') {
+      setTestText(customText || '');
+    } else if (selectedMode === 'zen') {
+      setTestText(generatePrompt('paragraph', 200, 'english'));
+    } else {
+      // time/words default
+      if (selectedMode === 'words') {
+        setTestText(generatePrompt('words', selectedWordCount, 'english'));
+      } else {
+        setTestText(generatePrompt('time', Math.max(selectedWordCount, 120), 'english'));
+      }
+    }
+  }, [selectedMode, selectedWordCount, selectedDuration, codeLang, customText]);
 
   const characters = useMemo(() => testText.split(''), [testText]);
   const tokens = useMemo(() => {
@@ -262,16 +434,54 @@ export default function TypingArea({ text = '', mode = 'time', duration = 60, on
     });
   }, [characters, input, errors]);
 
+  const innerRef = useRef(null);
+  const outerRef = useRef(null);
+  const currentCharRef = useRef(null);
+
+  // Measure and set outer height to be 3 lines
+  useLayoutEffect(() => {
+    const el = innerRef.current?.firstElementChild || currentCharRef.current;
+    if (el) {
+      const lh = el.getBoundingClientRect().height;
+      setOuterHeight(Math.round(lh * 3));
+      setCursorPos((p) => ({ ...p, height: lh }));
+    }
+  }, [testText]);
+
+  // Update cursor position and translateY when currentIndex changes
+  useLayoutEffect(() => {
+    const charEl = currentCharRef.current;
+    const innerEl = innerRef.current;
+    if (!charEl || !innerEl) return;
+    const innerRect = innerEl.getBoundingClientRect();
+    const charRect = charEl.getBoundingClientRect();
+    const left = charRect.left - innerRect.left + innerEl.scrollLeft;
+    const top = charRect.top - innerRect.top + innerEl.scrollTop;
+    setCursorPos({ left, top, height: charRect.height });
+
+    const lineHeight = charRect.height;
+    const line = Math.floor(top / lineHeight);
+    const desired = Math.max(0, (line - 1) * lineHeight);
+    setTranslateY(desired);
+  }, [currentIndex, testText]);
+
   // Minimal mode for homepage
   if (minimal) {
     return (
       <div className="w-full">
         <div className="glass-panel p-8 rounded-2xl cursor-text" onClick={() => inputRef.current?.focus()}>
           <div className="relative bg-card/50 backdrop-blur-sm p-6 rounded-xl border border-border-dark min-h-[120px] overflow-hidden">
-            <div className="flex flex-wrap gap-1 leading-relaxed font-mono text-lg">
-              {tokens.map((token, idx) => (
-                <CharacterToken key={idx} char={token.char} status={token.status} />
-              ))}
+            <div ref={outerRef} style={{ height: outerHeight, overflow: 'hidden' }}>
+              <div ref={innerRef} className="flex flex-wrap gap-1 leading-relaxed font-mono text-lg" style={{ transform: `translateY(-${translateY}px)` }}>
+                {tokens.map((token, idx) => (
+                  <CharacterToken
+                    key={idx}
+                    char={token.char}
+                    status={token.status}
+                    innerRef={idx === currentIndex ? (el) => (currentCharRef.current = el) : null}
+                  />
+                ))}
+              </div>
             </div>
             {!isActive && !isFinished && (
               <div className="absolute inset-0 flex items-center justify-center bg-black/20 rounded-xl">
@@ -300,14 +510,25 @@ export default function TypingArea({ text = '', mode = 'time', duration = 60, on
   return (
     <div className="w-full max-w-4xl mx-auto py-8">
       {/* Mode selector */}
-      <ModeSelector
-        mode={selectedMode}
-        duration={selectedDuration}
-        wordCount={selectedWordCount}
-        onModeChange={handleModeChange}
-        onDurationChange={handleDurationChange}
-        onWordCountChange={handleWordCountChange}
-      />
+      {showModeSelector && (
+        <ModeSelector
+          mode={selectedMode}
+          duration={selectedDuration}
+          wordCount={selectedWordCount}
+          onModeChange={handleModeChange}
+          onDurationChange={handleDurationChange}
+          onWordCountChange={handleWordCountChange}
+          codeLang={codeLang}
+          onCodeLangChange={(l) => { setCodeLang(l); resetTest(); }}
+          customText={customText}
+          onCustomChange={(v) => setCustomText(v)}
+          onCustomStart={() => {
+            setTestText(customText);
+            resetTest();
+            startTest();
+          }}
+        />
+      )}
 
       {/* Live metrics bar */}
       <div className="flex items-center justify-center gap-8 mb-8 py-4 border-b border-border flex-wrap">
@@ -343,14 +564,21 @@ export default function TypingArea({ text = '', mode = 'time', duration = 60, on
         className="glass-panel p-12 rounded-2xl cursor-text mb-8 min-h-[280px] relative"
         onClick={() => inputRef.current?.focus()}
       >
-        <div className="relative h-40 overflow-hidden flex flex-col justify-center">
-          <div className="flex flex-wrap gap-1 leading-loose font-mono text-2xl break-words">
-            {tokens.map((token, idx) => (
-              <CharacterToken key={idx} char={token.char} status={token.status} />
-            ))}
+        <div className="relative overflow-hidden flex flex-col justify-center">
+          <div ref={outerRef} style={{ height: outerHeight, overflow: 'hidden' }}>
+            <div ref={innerRef} className="flex flex-wrap gap-1 leading-loose font-mono text-2xl break-words" style={{ transform: `translateY(-${translateY}px)` }}>
+              {tokens.map((token, idx) => (
+                <CharacterToken
+                  key={idx}
+                  char={token.char}
+                  status={token.status}
+                  innerRef={idx === currentIndex ? (el) => (currentCharRef.current = el) : null}
+                />
+              ))}
+            </div>
           </div>
-          
-          <CursorBeam isActive={isActive} />
+
+          <CursorBeam isActive={isActive} left={cursorPos.left} top={cursorPos.top} height={cursorPos.height} />
         </div>
 
         {!isActive && !isFinished && (
@@ -384,20 +612,22 @@ export default function TypingArea({ text = '', mode = 'time', duration = 60, on
       </div>
 
       {/* Control buttons */}
-      <div className="flex justify-center gap-4">
-        <button
-          onClick={startTest}
-          disabled={isActive}
-          className="btn-primary disabled:opacity-50"
-        >
-          <Zap className="w-4 h-4 mr-2" />
-          {isActive ? 'Testing...' : 'Start Test'}
-        </button>
-        <button onClick={resetTest} className="btn-ghost">
-          <RotateCcw className="w-4 h-4 mr-2" />
-          Reset
-        </button>
-      </div>
+      {showActionButtons && (
+        <div className="flex justify-center gap-4">
+          <button
+            onClick={startTest}
+            disabled={isActive}
+            className="btn-primary disabled:opacity-50"
+          >
+            <Zap className="w-4 h-4 mr-2" />
+            {isActive ? 'Testing...' : 'Start Test'}
+          </button>
+          <button onClick={resetTest} className="btn-ghost">
+            <RotateCcw className="w-4 h-4 mr-2" />
+            Reset
+          </button>
+        </div>
+      )}
 
       {/* Results screen */}
       <ResultsScreen

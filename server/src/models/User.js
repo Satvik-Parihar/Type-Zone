@@ -68,6 +68,10 @@ const userSchema = new mongoose.Schema(
             type: typingStatsSchema,
             default: () => ({})
         },
+        achievements: {
+            type: [String],
+            default: []
+        },
         settings: {
             type: settingsSchema,
             default: () => ({})

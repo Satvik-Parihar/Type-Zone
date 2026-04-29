@@ -1,12 +1,16 @@
 import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useTheme } from '../context/ThemeContext';
+import { useAuth } from '../context/AuthContext';
 import { Menu, X, SunMoon, LogIn } from 'lucide-react';
 import './Navbar.css';
+import ThemePicker from '../components/ThemePicker';
 
 export default function Navbar() {
-  const { currentTheme, cycleTheme } = useTheme();
+  const { currentTheme } = useTheme();
+  const { user } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
   const location = useLocation();
 
   const navLinks = [
@@ -45,14 +49,27 @@ export default function Navbar() {
         </div>
 
         <div className="navbar-right">
-          <button className="navbar-icon-btn" onClick={cycleTheme} title={`Theme: ${currentTheme}`}>
-            <SunMoon size={18} />
-          </button>
+          <div style={{ position: 'relative' }}>
+            <button
+              className="navbar-icon-btn"
+              onClick={() => setPickerOpen((v) => !v)}
+              title={`Theme: ${currentTheme}`}
+            >
+              <SunMoon size={18} />
+            </button>
+            {pickerOpen && <ThemePicker onClose={() => setPickerOpen(false)} />}
+          </div>
 
-          <Link to="/login" className="navbar-link-btn">
-            <LogIn size={16} />
-            Login
-          </Link>
+          {user ? (
+            <Link to="/profile" className="navbar-link-btn">
+              {user.username}
+            </Link>
+          ) : (
+            <Link to="/login" className="navbar-link-btn">
+              <LogIn size={16} />
+              Login
+            </Link>
+          )}
         </div>
 
         <button className="navbar-mobile-btn" onClick={() => setMobileOpen((open) => !open)}>

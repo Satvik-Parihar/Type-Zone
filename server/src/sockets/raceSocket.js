@@ -6,34 +6,54 @@ const activeRaces = new Map();
 function serializeRoom(room) {
   if (!room) return null;
 
-  return {
-    id: room.id,
-    name: room.name,
-    host: room.host,
-    isPrivate: room.isPrivate,
-    maxPlayers: room.maxPlayers,
-    createdAt: room.createdAt,
-    status: room.status,
-    players: Array.from(room.players.values())
-  };
+  try {
+    return {
+      id: room.id,
+      name: room.name,
+      host: room.host,
+      isPrivate: room.isPrivate,
+      maxPlayers: room.maxPlayers,
+      createdAt: room.createdAt,
+      status: room.status,
+      players: Array.from(room.players.values()).map(p => ({
+        id: p.id,
+        username: p.username,
+        ready: p.ready,
+        wpm: p.wpm || 0,
+        accuracy: p.accuracy || 0,
+        progress: p.progress || 0,
+        finished: p.finished || false,
+        finishTime: p.finishTime || null
+      }))
+    };
+  } catch (error) {
+    console.error('Error serializing room:', error.message);
+    return null;
+  }
 }
 
 function serializeRoomListItem(room) {
-  return {
-    id: room.id,
-    name: room.name,
-    host: {
-      id: room.host.id,
-      username: room.host.username
-    },
-    players: Array.from(room.players.values()).map((p) => ({
-      id: p.id,
-      username: p.username
-    })),
-    maxPlayers: room.maxPlayers,
-    createdAt: room.createdAt,
-    isPrivate: room.isPrivate
-  };
+  try {
+    return {
+      id: room.id,
+      name: room.name,
+      host: {
+        id: room.host.id,
+        username: room.host.username
+      },
+      players: Array.from(room.players.values()).map((p) => ({
+        id: p.id,
+        username: p.username
+      })),
+      maxPlayers: room.maxPlayers,
+      createdAt: room.createdAt,
+      isPrivate: room.isPrivate,
+      status: room.status || 'waiting'
+    };
+  } catch (error) {
+    console.error('Error serializing room list item:', error.message);
+    return null;
+  }
 }
 
 function generateRoomId() {
@@ -170,30 +190,44 @@ function finishRace(roomId) {
     finishedAt: new Date()
   };
 
-  RaceHistory.insertMany(
-    finishedPlayers.map((player, index) => ({
-      userId: player.id,
-      roomId: room.id,
-      roomName: room.name,
-      placement: index + 1,
-      participants: room.players.size,
-      wpm: Number(player.wpm) || 0,
-      accuracy: Number(player.accuracy) || 0,
-      finishTime: Number(player.finishTime) || 0,
-      isWinner: index === 0,
-      raceTextSnippet: activeRaces.get(roomId)?.text?.slice(0, 160) || '',
-      finishedAt: new Date()
-    }))
-  ).catch((error) => {
-    console.error('Failed to persist race history:', error);
-  });
+  // Persist race history asynchronously with better error handling
+  const historyRecords = finishedPlayers.map((player, index) => ({
+    userId: player.id,
+    roomId: room.id,
+    roomName: room.name,
+    placement: index + 1,
+    participants: room.players.size,
+    wpm: Number(player.wpm) || 0,
+    accuracy: Number(player.accuracy) || 0,
+    finishTime: Number(player.finishTime) || 0,
+    isWinner: index === 0,
+    raceTextSnippet: activeRaces.get(roomId)?.text?.slice(0, 160) || '',
+    finishedAt: new Date()
+  }));
 
-  // Clean up
+  RaceHistory.insertMany(historyRecords)
+    .then((docs) => {
+      console.log(`Successfully persisted ${docs.length} race history records for room ${roomId}`);
+    })
+    .catch((error) => {
+      console.error(`Failed to persist race history for room ${roomId}:`, error.message);
+      // Log the specific records that failed for debugging
+      console.error('Failed records:', historyRecords);
+    });
+
+  // Clean up active race data immediately
   activeRaces.delete(roomId);
-  // Keep room for a few minutes before cleanup
-  setTimeout(() => {
+  
+  // Schedule room deletion after 5 minutes (for replay/history purposes)
+  const roomCleanupTimeout = setTimeout(() => {
     rooms.delete(roomId);
+    console.log(`Cleaned up room ${roomId} after 5-minute retention period`);
   }, 5 * 60 * 1000); // 5 minutes
+
+  // Store timeout reference for potential manual cleanup
+  if (!room.cleanupTimeout) {
+    room.cleanupTimeout = roomCleanupTimeout;
+  }
 
   return raceResult;
 }
@@ -381,7 +415,42 @@ module.exports = (io) => {
 
     socket.on('disconnect', () => {
       console.log('User disconnected:', socket.id);
-      // Handle disconnection (similar to leave room)
+      
+      // Handle disconnection - remove user from any rooms they're in
+      const user = socket.user;
+      if (!user) return;
+
+      try {
+        for (const [roomId, room] of rooms) {
+          if (room.players.has(user.id)) {
+            room.players.delete(user.id);
+
+            // If room becomes empty, clean it up
+            if (room.players.size === 0) {
+              // If there's an active race, don't delete immediately
+              if (room.status !== 'active' && room.status !== 'starting') {
+                rooms.delete(roomId);
+              }
+            } else {
+              // If host disconnected, assign new host
+              if (room.host.id === user.id) {
+                const remainingPlayers = Array.from(room.players.values());
+                if (remainingPlayers.length > 0) {
+                  room.host = remainingPlayers[0];
+                }
+              }
+              
+              // Update remaining players
+              io.to(roomId).emit('room:updated', serializeRoom(room));
+            }
+
+            io.emit('rooms:list', getPublicRooms());
+            break;
+          }
+        }
+      } catch (error) {
+        console.error('Error handling user disconnect:', error.message);
+      }
     });
   });
 };

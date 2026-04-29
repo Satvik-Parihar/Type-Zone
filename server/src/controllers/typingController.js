@@ -61,13 +61,14 @@ async function start(req, res) {
 }
 
 async function submit(req, res) {
-    const session = await submitTypingSession({
+    const result = await submitTypingSession({
         userId: req.auth.userId,
         ...req.body
     });
 
     res.status(201).json({
-        id: session._id
+        id: result.session._id,
+        newAchievements: result.newAchievements || []
     });
 }
 
@@ -213,8 +214,11 @@ async function saveSession(req, res) {
         keyAccuracy: req.body.keyAccuracy && typeof req.body.keyAccuracy === 'object' ? req.body.keyAccuracy : {}
     };
 
-    const created = await TypingSession.create(payload);
-    res.status(201).json({ id: created._id });
+    const result = await submitTypingSession(payload);
+    res.status(201).json({
+        id: result.session._id,
+        newAchievements: result.newAchievements || []
+    });
 }
 
 async function getSessions(req, res) {

@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import { ArrowRight, Zap, Users, BarChart3, Keyboard, Play } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import TypingArea from '../components/TypingArea';
+import { SkeletonLoader } from '../ui/SkeletonLoader';
 
 const TEST_WORDS = [
   'the quick brown fox jumps over the lazy dog several times each day',
@@ -20,6 +21,7 @@ export default function HomePage() {
     topWpm24h: 0,
     avgWpm: 0
   });
+  const [statsLoading, setStatsLoading] = useState(true);
   const [testWords, setTestWords] = useState(TEST_WORDS[0]);
   const [testComplete, setTestComplete] = useState(false);
   const [testResult, setTestResult] = useState(null);
@@ -34,6 +36,7 @@ export default function HomePage() {
   useEffect(() => {
     // Fetch real stats
     const fetchStats = async () => {
+      setStatsLoading(true);
       try {
         const res = await fetch('/api/typing/stats/global');
         if (res.ok) {
@@ -41,6 +44,8 @@ export default function HomePage() {
         }
       } catch (error) {
         console.error('Failed to fetch stats:', error);
+      } finally {
+        setStatsLoading(false);
       }
     };
 
@@ -133,7 +138,16 @@ export default function HomePage() {
       <div className="py-16 px-4">
         <div className="max-w-4xl mx-auto">
           <h2 className="text-3xl font-bold text-text mb-12 text-center">Community Statistics</h2>
-          {hasCommunityStats ? (
+          {statsLoading ? (
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+              {[...Array(5)].map((_, idx) => (
+                <div key={idx} className="card p-4 text-center space-y-3">
+                  <SkeletonLoader height="h-4" className="w-3/4 mx-auto" />
+                  <SkeletonLoader height="h-8" className="w-1/2 mx-auto" />
+                </div>
+              ))}
+            </div>
+          ) : hasCommunityStats ? (
             <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
               {[
                 { label: 'Total Sessions', value: stats.totalSessions.toLocaleString() },

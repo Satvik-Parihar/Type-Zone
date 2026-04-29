@@ -49,6 +49,81 @@ function buildMistakeFrequency(keystrokeTimeline = [], keyMistakes = {}) {
     return next;
 }
 
+function calculateStreak(allSessions = []) {
+    if (!Array.isArray(allSessions) || allSessions.length === 0) return 0;
+
+    const sortedDays = [...new Set(
+        allSessions
+            .map((session) => new Date(session.createdAt).toISOString().slice(0, 10))
+            .sort((a, b) => (a < b ? 1 : -1))
+    )].sort((a, b) => (a > b ? 1 : -1));
+
+    let streak = 1;
+    for (let index = sortedDays.length - 1; index > 0; index -= 1) {
+        const current = new Date(sortedDays[index]);
+        const previous = new Date(sortedDays[index - 1]);
+        const diff = Math.floor((current - previous) / (1000 * 60 * 60 * 24));
+        if (diff === 1) {
+            streak += 1;
+        } else {
+            break;
+        }
+    }
+
+    return streak;
+}
+
+async function checkAchievements(userId, session, allSessions) {
+    const toAward = [];
+
+    if (session.wpm >= 50) toAward.push('wpm-50');
+    if (session.wpm >= 75) toAward.push('wpm-75');
+    if (session.wpm >= 100) toAward.push('wpm-100');
+    if (session.wpm >= 150) toAward.push('wpm-150');
+
+    if (Number(session.accuracy) === 100) toAward.push('perfect-accuracy');
+    const highAccCount = allSessions.filter((item) => Number(item.accuracy) >= 98).length;
+    if (highAccCount >= 10) toAward.push('accuracy-streak-10');
+
+    if (allSessions.length >= 10) toAward.push('sessions-10');
+    if (allSessions.length >= 100) toAward.push('sessions-100');
+
+    const streak = calculateStreak(allSessions);
+    if (streak >= 7) toAward.push('streak-7');
+    if (streak >= 30) toAward.push('streak-30');
+
+    const user = await User.findById(userId);
+    if (!user) return [];
+
+    const existing = new Set(user.achievements || []);
+    const newOnes = toAward.filter((key) => !existing.has(key));
+
+    if (newOnes.length > 0) {
+      await User.findByIdAndUpdate(userId, {
+        $push: { achievements: { $each: newOnes } }
+      });
+    }
+
+    return newOnes;
+}
+
+function getAchievementMeta(key) {
+    const catalog = {
+        'wpm-50': { key: 'wpm-50', title: 'Speed Builder', description: 'Reached 50 WPM' },
+        'wpm-75': { key: 'wpm-75', title: 'Fast Fingers', description: 'Reached 75 WPM' },
+        'wpm-100': { key: 'wpm-100', title: 'Rocket Typist', description: 'Reached 100 WPM' },
+        'wpm-150': { key: 'wpm-150', title: 'Turbo Mode', description: 'Reached 150 WPM' },
+        'perfect-accuracy': { key: 'perfect-accuracy', title: 'Perfect Run', description: 'Finished with 100% accuracy' },
+        'accuracy-streak-10': { key: 'accuracy-streak-10', title: 'Precision Habit', description: 'Logged 10 high-accuracy sessions' },
+        'sessions-10': { key: 'sessions-10', title: 'Session Starter', description: 'Completed 10 sessions' },
+        'sessions-100': { key: 'sessions-100', title: 'Century Club', description: 'Completed 100 sessions' },
+        'streak-7': { key: 'streak-7', title: 'Weekly Streak', description: 'Typed 7 days in a row' },
+        'streak-30': { key: 'streak-30', title: 'Monthly Streak', description: 'Typed 30 days in a row' }
+    };
+
+    return catalog[key] || { key, title: key, description: '' };
+}
+
 async function startTypingSession({ userId, mode, difficulty, wordCount, timeLimit, customText, weakKeys }) {
     return {
         textId: generateTextId(),
@@ -58,6 +133,7 @@ async function startTypingSession({ userId, mode, difficulty, wordCount, timeLim
 
 async function submitTypingSession(payload) {
     const session = await TypingSession.create(payload);
+    const allSessions = await TypingSession.find({ userId: payload.userId }).sort({ createdAt: -1 }).lean();
 
     const keystrokeTimeline = payload.keystrokeTimeline || [];
     const keystrokeTimings = keystrokeTimeline
@@ -109,12 +185,17 @@ async function submitTypingSession(payload) {
     await user.save();
     await syncLeaderboardForUser(user);
 
-    return session;
+    const newAchievementKeys = await checkAchievements(payload.userId, payload, allSessions);
+    const newAchievements = newAchievementKeys.map(getAchievementMeta);
+
+    return { session, newAchievements };
 }
 
 module.exports = {
     startTypingSession,
     submitTypingSession,
     calculateExpectedScore,
-    updateELO
+    updateELO,
+    checkAchievements,
+    calculateStreak
 };

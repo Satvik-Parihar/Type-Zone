@@ -28,7 +28,7 @@ export default function TypingPage() {
     }
 
     try {
-      await api.post('/typing/sessions', {
+      const { data } = await api.post('/typing/sessions', {
         textId: 'practice-generated',
         mode: currentMode,
         wpm: metrics.wpm,
@@ -43,6 +43,12 @@ export default function TypingPage() {
         keystrokeTimeline: metrics.keystrokeTimeline || []
       });
       toast.success('Session saved to your profile');
+
+      if (Array.isArray(data?.newAchievements)) {
+        data.newAchievements.forEach((achievement) => {
+          toast.success(`Achievement unlocked: ${achievement.title || achievement.key || 'Unknown'}`);
+        });
+      }
     } catch (error) {
       toast.warning('Session finished, but could not be saved');
     }
