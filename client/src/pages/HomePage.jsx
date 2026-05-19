@@ -118,7 +118,15 @@ export default function HomePage() {
       {/* Mini Typing Test */}
       <div className="px-4 py-12 border-t border-b border-border bg-card/30">
         <div className="max-w-3xl mx-auto">
-          <h2 className="text-2xl font-bold text-text mb-8 text-center">Try It Now</h2>
+          <div className="text-center mb-8">
+            <h2 className="text-2xl font-bold text-text inline-block relative">
+              Try It Now
+              <span
+                className="absolute -bottom-1 left-0 right-0 h-0.5 rounded-full"
+                style={{ background: 'var(--color-accent)' }}
+              />
+            </h2>
+          </div>
           <TypingArea text={testWords} mode="time" duration={30} onComplete={handleTestComplete} minimal={true} />
           
           {testResult && testComplete && (
@@ -182,9 +190,9 @@ export default function HomePage() {
 
       {/* Features Grid */}
       <div className="py-16 px-4 border-t border-border">
-        <div className="max-w-4xl mx-auto">
+        <div className="max-w-6xl mx-auto">
           <h2 className="text-3xl font-bold text-text mb-12 text-center">Why TypeZone?</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
             {features.map((feature, idx) => {
               const Icon = feature.icon;
               return (
@@ -206,11 +214,22 @@ export default function HomePage() {
       </div>
 
       {/* CTA Section */}
-      <div className="py-16 px-4 text-center border-t border-border">
-        <h2 className="text-3xl font-bold text-text mb-6">Ready to test your typing?</h2>
-        <Link to="/type" className="btn-primary inline-block">
-          Start Your First Test
-        </Link>
+      <div className="py-20 px-4 border-t border-border">
+        <div
+          className="max-w-2xl mx-auto text-center card p-12"
+          style={{ boxShadow: 'var(--shadow-glow)' }}
+        >
+          <h2 className="text-4xl font-bold text-text mb-4">
+            Ready to <span className="text-accent">level up</span>?
+          </h2>
+          <p className="text-text-secondary mb-8">
+            Track every keystroke. Race real people. See your progress compound.
+          </p>
+          <div className="flex flex-col sm:flex-row gap-4 justify-center">
+            <Link to="/type" className="btn-primary">Start Typing</Link>
+            <Link to="/multiplayer" className="btn-ghost">Race Someone</Link>
+          </div>
+        </div>
       </div>
     </div>
   );

@@ -43,6 +43,12 @@ export default function TypingPage() {
   return (
     <div className="min-h-screen bg-background pt-24 pb-12">
       <div className="max-w-5xl mx-auto px-4">
+        <div className="text-center mb-10">
+          <h1 className="text-3xl font-bold text-text mb-1">Typing Test</h1>
+          <p className="text-sm text-text-secondary">
+            Tab to restart · Esc to stop · results auto-saved when signed in
+          </p>
+        </div>
         <TypingArea onComplete={handleTestComplete} />
       </div>
     </div>

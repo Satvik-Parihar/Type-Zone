@@ -36,7 +36,7 @@ const CursorBeam = ({ isActive, left = 0, top = 0, height = 24 }) => (
         left, 
         top, 
         height,
-        boxShadow: '0 0 12px var(--color-accent), 0 0 6px var(--color-accent, rgba(92, 225, 230, 0.6))',
+        boxShadow: '0 0 12px var(--color-accent), 0 0 6px var(--color-accent)',
       }}
       animate={{ opacity: [1, 0.4, 1], boxShadow: ['0 0 12px var(--color-accent)', '0 0 20px var(--color-accent)', '0 0 12px var(--color-accent)'] }}
       transition={{ duration: 1.2, repeat: Infinity, ease: 'easeInOut' }}
@@ -188,7 +188,7 @@ const ModeSelector = ({
 };
 
 // Results screen — enhanced with WPM sparkline and character heatmap driven by metrics
-const ResultsScreen = ({ metrics, text, onNewTest, onRetry }) => {
+const ResultsScreen = ({ metrics, text, onNewTest, onRetry, onClose }) => {
   if (!metrics || !metrics.isFinished) return null;
 
   const wpmHistory = Array.isArray(metrics.wpmHistory) ? metrics.wpmHistory : [];
@@ -287,9 +287,10 @@ const ResultsScreen = ({ metrics, text, onNewTest, onRetry }) => {
           </div>
         </div>
 
-        <div className="flex gap-4 mt-4">
+        <div className="flex flex-wrap gap-4 mt-4">
           <button onClick={onNewTest} className="btn-primary flex-1">New Test</button>
           <button onClick={onRetry} className="btn-secondary flex-1">Retry</button>
+          <button onClick={onClose} className="btn-ghost flex-1">Close</button>
         </div>
       </motion.div>
     </motion.div>
@@ -395,8 +396,7 @@ export default function TypingArea({
       setTestText(text);
       resetTest();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [text]);
+  }, [text, testText, resetTest]);
 
   const handleModeChange = useCallback((newMode) => {
     setSelectedMode(newMode);
@@ -582,7 +582,7 @@ export default function TypingArea({
       )}
 
       {showModeSelector && (
-        <p className="text-center text-xs text-text-secondary mb-4 opacity-60">
+        <p className="text-center text-xs text-text-secondary mb-6 opacity-60">
           Tab — restart · Esc — stop
         </p>
       )}
@@ -692,6 +692,9 @@ export default function TypingArea({
         text={testText}
         onNewTest={handleNewTest}
         onRetry={handleRetry}
+        onClose={() => {
+          resetTest();
+        }}
       />
     </div>
   );

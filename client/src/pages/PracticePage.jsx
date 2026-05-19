@@ -116,12 +116,12 @@ function DrillCard({ drill, completed, onOpen }) {
           <Icon className="w-8 h-8 text-accent" />
           <span className={`text-xs px-2 py-1 rounded badge ${
             drill.difficulty === 'Beginner'
-              ? 'bg-green-500/20 text-green-400'
+              ? 'bg-green-500/20 text-correct'
               : drill.difficulty === 'Intermediate'
-                ? 'bg-yellow-500/20 text-yellow-400'
+                ? 'bg-yellow-500/20 text-accent'
                 : drill.difficulty === 'Advanced'
-                  ? 'bg-red-500/20 text-red-400'
-                  : 'bg-purple-500/20 text-purple-400'
+                  ? 'bg-red-500/20 text-error'
+                  : 'bg-purple-500/20 text-accent'
           }`}>
             {drill.difficulty}
           </span>

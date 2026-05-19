@@ -8,11 +8,17 @@ import { roomEvents } from '../services/socketService';
 export default function LobbyPage() {
   const [rooms, setRooms] = useState([]);
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [newRoom, setNewRoom] = useState({ name: '', isPrivate: false, password: '' });
+  const [newRoom, setNewRoom] = useState({ name: '', isPrivate: false, password: '', maxPlayers: 8 });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const navigate = useNavigate();
   const socket = useSocket();
+
+  useEffect(() => {
+    if (socket) return;
+    const timer = setTimeout(() => setLoading(false), 3000);
+    return () => clearTimeout(timer);
+  }, [socket]);
 
   useEffect(() => {
     if (!socket) return;
@@ -66,10 +72,11 @@ export default function LobbyPage() {
       socket.emit(roomEvents.CREATE_ROOM, {
         name: newRoom.name.trim(),
         isPrivate: newRoom.isPrivate,
-        password: newRoom.isPrivate ? newRoom.password : null
+        password: newRoom.isPrivate ? newRoom.password : null,
+        maxPlayers: newRoom.maxPlayers
       });
 
-      setNewRoom({ name: '', isPrivate: false, password: '' });
+      setNewRoom({ name: '', isPrivate: false, password: '', maxPlayers: 8 });
       setShowCreateModal(false);
       setError(null);
     }
@@ -195,6 +202,9 @@ export default function LobbyPage() {
                       <Users className="w-4 h-4" />
                       {room.players.length}/{room.maxPlayers} players
                     </div>
+                    <span className="badge text-xs">
+                      {room.mode || 'quote'}
+                    </span>
                     <div className="flex items-center gap-2">
                       <span>Created {new Date(room.createdAt).toLocaleTimeString()}</span>
                     </div>
@@ -271,6 +281,21 @@ export default function LobbyPage() {
                   />
                 </div>
               )}
+
+              <div>
+                <label className="block text-sm font-medium text-text-secondary mb-1.5">
+                  Max Players
+                </label>
+                <select
+                  value={newRoom.maxPlayers}
+                  onChange={(e) => setNewRoom((r) => ({ ...r, maxPlayers: Number(e.target.value) }))}
+                  className="input-field"
+                >
+                  {[2, 3, 4, 5, 6, 7, 8].map((n) => (
+                    <option key={n} value={n}>{n} players</option>
+                  ))}
+                </select>
+              </div>
             </div>
 
             <div className="flex gap-3">

@@ -259,7 +259,8 @@ async function getProfileStats(req, res) {
             totalTimeMs: 0,
             currentStreak: 0,
             longestStreak: 0,
-            achievements: []
+            achievements: [],
+            weakKeys: []
         });
     }
 
@@ -270,6 +271,23 @@ async function getProfileStats(req, res) {
     const totalTimeMs = sessions.reduce((sum, session) => sum + (Number(session.timeTaken) || 0) * 1000, 0);
     const { currentStreak, longestStreak } = calculateStreak(sessions);
 
+    // Aggregate per-key accuracy across all sessions
+    const keyTotals = {};
+    sessions.forEach((s) => {
+        if (!s.keyAccuracy) return;
+        Object.entries(s.keyAccuracy).forEach(([k, v]) => {
+            if (!keyTotals[k]) keyTotals[k] = { sum: 0, count: 0 };
+            keyTotals[k].sum += Number(v) || 0;
+            keyTotals[k].count += 1;
+        });
+    });
+    const weakKeys = Object.entries(keyTotals)
+        .map(([k, d]) => ({ key: k, accuracy: d.sum / d.count }))
+        .filter((d) => d.accuracy < 75)
+        .sort((a, b) => a.accuracy - b.accuracy)
+        .slice(0, 8)
+        .map((d) => d.key);
+
     res.status(200).json({
         bestWpm,
         avgWpm,
@@ -277,7 +295,8 @@ async function getProfileStats(req, res) {
         totalTimeMs,
         currentStreak,
         longestStreak,
-        achievements: []
+        achievements: [],
+        weakKeys
     });
 }
 

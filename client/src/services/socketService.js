@@ -72,6 +72,7 @@ export const raceEvents = {
     RACE_STARTED: 'race:started',
     JOIN_RACE: 'race:join',
     RACE_JOINED: 'race:joined',
+    RACE_PROGRESS: 'race:progress',
     RACE_UPDATE: 'race:update',
     RACE_FINISHED: 'race:finished'
 };

@@ -3,7 +3,6 @@ import { Navigate, Route, Routes } from 'react-router-dom';
 import Layout from './layout/Layout';
 import HomePage from './pages/HomePage';
 import LoginPage from './pages/LoginPage';
-import RegisterPage from './pages/RegisterPage';
 import TypingPage from './pages/TypingPage';
 import PracticePage from './pages/PracticePage';
 import LobbyPage from './pages/LobbyPage';
@@ -51,7 +50,7 @@ export default function App() {
       
       {/* Auth routes */}
       <Route path="/login" element={<Layout><LoginPage /></Layout>} />
-      <Route path="/register" element={<Layout><RegisterPage /></Layout>} />
+      <Route path="/register" element={<Navigate to="/login" replace />} />
       
       {/* Multiplayer routes */}
       <Route path="/multiplayer" element={<Layout><LobbyPage /></Layout>} />

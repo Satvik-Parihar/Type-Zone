@@ -11,7 +11,7 @@ const filters = [
 ];
 
 const columns = [
-  { key: 'rank', label: 'Rank' },
+  { key: 'rank', label: 'Rank / Player' },
   { key: 'wpm', label: 'WPM' },
   { key: 'accuracy', label: 'Accuracy' },
   { key: 'tests', label: 'Tests' },
@@ -138,13 +138,13 @@ export default function LeaderboardPage() {
             </div>
           ) : (
             <>
-              <div className="grid grid-cols-6 gap-4 p-5 border-b border-border bg-background/80 text-text-secondary text-sm uppercase tracking-[0.2em]">
+              <div className="hidden md:grid grid-cols-[40px_1fr_80px_80px_80px_100px] gap-4 p-5 border-b border-border bg-background/80 text-text-secondary text-sm uppercase tracking-[0.2em]">
                 {columns.map((column) => (
                   <button
                     key={column.key}
                     type="button"
                     onClick={() => toggleSort(column.key)}
-                    className="flex items-center gap-2 text-left"
+                    className={`flex items-center gap-2 text-left ${column.key === 'rank' ? 'col-span-2' : ''}`}
                   >
                     {column.label}
                     {indicator(column.key)}
@@ -159,18 +159,18 @@ export default function LeaderboardPage() {
                     initial={{ opacity: 0, x: -20 }}
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ delay: index * 0.05 }}
-                    className={`grid grid-cols-6 gap-4 p-5 items-center transition hover:bg-white/5 ${leader.rank <= 3 ? 'bg-accent/10' : ''}`}
+                    className={`flex flex-col md:grid md:grid-cols-[40px_1fr_80px_80px_80px_100px] gap-2 md:gap-4 p-5 items-center transition hover:bg-white/5 ${leader.rank <= 3 ? 'bg-accent/10' : ''}`}
                   >
-                    <div className="flex items-center gap-3 col-span-2 md:col-span-1">
-                      <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-surface border border-border text-text font-semibold">
-                        {leader.rank <= 3 ? <Crown className="w-5 h-5 text-accent" /> : `#${leader.rank}`}
+                    <div className="flex items-center gap-3 col-span-full md:col-span-2">
+                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-surface border border-border text-text font-semibold text-sm">
+                        {leader.rank <= 3 ? <Crown className="w-4 h-4 text-accent" /> : `#${leader.rank}`}
                       </span>
+                      <span className="font-medium text-text truncate">{leader.name}</span>
                     </div>
-                    <div className="col-span-2 text-text font-medium">{leader.name}</div>
-                    <div className="col-span-1 text-center text-accent font-semibold">{leader.wpm}</div>
-                    <div className="col-span-1 text-center text-correct font-semibold">{Math.round(leader.accuracy)}%</div>
-                    <div className="col-span-1 text-center text-text-secondary font-semibold">{leader.tests}</div>
-                    <div className="col-span-6 md:col-span-1 text-right text-text-secondary text-sm">
+                    <div className="text-center text-accent font-semibold">{leader.wpm}</div>
+                    <div className="text-center text-correct font-semibold">{Math.round(leader.accuracy)}%</div>
+                    <div className="text-center text-text-secondary font-semibold">{leader.tests}</div>
+                    <div className="text-right text-text-secondary text-sm">
                       {leader.date ? new Date(leader.date).toLocaleDateString() : '—'}
                     </div>
                   </motion.div>

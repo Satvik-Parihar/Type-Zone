@@ -9,29 +9,12 @@ const Footer = () => {
     {
       label: 'Product',
       items: [
-        { name: 'Typing Practice', href: '#' },
-        { name: 'Multiplayer', href: '#' },
-        { name: 'Leaderboard', href: '#' },
-        { name: 'Stats', href: '#' },
+        { name: 'Typing Test', href: '/type' },
+        { name: 'Multiplayer', href: '/multiplayer' },
+        { name: 'Leaderboard', href: '/leaderboard' },
+        { name: 'Practice', href: '/practice' },
       ]
-    },
-    {
-      label: 'Resources',
-      items: [
-        { name: 'Blog', href: '#' },
-        { name: 'Docs', href: '#' },
-        { name: 'API', href: '#' },
-        { name: 'Support', href: '#' },
-      ]
-    },
-    {
-      label: 'Legal',
-      items: [
-        { name: 'Privacy', href: '#' },
-        { name: 'Terms', href: '#' },
-        { name: 'Security', href: '#' },
-      ]
-    },
+    }
   ];
 
   const socials = [

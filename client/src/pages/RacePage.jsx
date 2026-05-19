@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { useParams, useNavigate } from 'react-router-dom';
-import { RotateCcw, Home } from 'lucide-react';
+import { useParams, useNavigate, Link } from 'react-router-dom';
+import { Home } from 'lucide-react';
 import { useTypingEngine } from '../hooks/useTypingEngine';
 import { generatePrompt } from '../utils/typingData';
 import { useSocket } from '../hooks/useSocket';
@@ -40,6 +40,7 @@ export default function RacePage() {
   const socket = useSocket();
   const [raceStarted, setRaceStarted] = useState(false);
   const [raceFinished, setRaceFinished] = useState(false);
+  const [raceResults, setRaceResults] = useState(null);
   const [raceText, setRaceText] = useState(() => generatePrompt('quote', 0, 'english'));
   const [players, setPlayers] = useState([]);
   const [countdown, setCountdown] = useState(3);
@@ -51,7 +52,6 @@ export default function RacePage() {
     isFinished,
     metrics,
     startTest,
-    resetTest,
     handleInput,
     inputRef
   } = useTypingEngine(raceText, 'time', 60);
@@ -65,6 +65,8 @@ export default function RacePage() {
     const handleRaceStarted = (data) => {
       setRaceText(data.text || generatePrompt('quote', 0, 'english'));
       setRaceStarted(true);
+      setRaceFinished(false);
+      setRaceResults(null);
       setCountdown(3);
       setPlayers(Array.isArray(data.players) ? data.players : []);
     };
@@ -82,6 +84,7 @@ export default function RacePage() {
 
     const handleRaceFinished = (result) => {
       setRaceFinished(true);
+      setRaceResults(result);
       // Update final rankings
       if (result.players) {
         setPlayers(result.players);
@@ -129,21 +132,19 @@ export default function RacePage() {
   }, [countdown, raceStarted, startTest]);
 
   useEffect(() => {
-    if (isFinished) {
-      setRaceFinished(true);
+    if (isFinished && raceStarted && socket && roomId) {
+      socket.emit(raceEvents.RACE_PROGRESS, {
+        roomId,
+        progress: 100,
+        wpm: metrics?.wpm || 0,
+        accuracy: metrics?.accuracy || 100,
+        finished: true,
+      });
     }
-  }, [isFinished]);
+  }, [isFinished, raceStarted, socket, roomId, metrics]);
 
   const handleRaceStart = () => {
     setRaceStarted(true);
-  };
-
-  const handleRetry = () => {
-    resetTest();
-    setRaceStarted(false);
-    setRaceFinished(false);
-    setCountdown(3);
-    setPlayers((prev) => prev.map((p) => ({ ...p, charactersTyped: 0, wpm: 0, accuracy: 100, finished: false, finishTime: 0 })));
   };
 
   return (
@@ -241,105 +242,56 @@ export default function RacePage() {
           </div>
         </div>
 
-        {/* Results */}
         {raceFinished && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="mb-12"
-          >
-            {/* Winner Banner */}
-            <div className="card p-8 text-center mb-8 bg-gradient-to-r from-accent/20 to-accent/10 border-accent/30">
-              <motion.div
-                animate={{ scale: [1, 1.05, 1] }}
-                transition={{ duration: 0.5 }}
-                className="inline-block mb-4"
-              >
-                <div className="text-5xl font-bold text-accent">WIN</div>
-              </motion.div>
-              <h2 className="text-3xl font-bold text-text mb-2">Race Completed!</h2>
-              <p className="text-text-secondary">
-                {players[0]?.finished ? 'You won the race!' : 'Better luck next time!'}
-              </p>
-            </div>
-
-            {/* Your Stats */}
-            <div className="card p-8 mb-8">
-              <h3 className="text-xl font-bold text-text mb-6">Your Results</h3>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div className="text-center">
-                  <p className="text-text-secondary text-sm mb-2">WPM</p>
-                  <p className="text-3xl font-bold text-accent">{Math.round(metrics.wpm || 0)}</p>
+          <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-50 p-4">
+            <div className="glass-panel p-8 rounded-2xl max-w-md w-full text-center">
+              <h2 className="text-3xl font-bold text-text mb-6">Race Complete</h2>
+              <div className="grid grid-cols-2 gap-4 mb-6">
+                <div className="card p-4">
+                  <p className="text-xs text-text-secondary uppercase mb-1">Your WPM</p>
+                  <p className="text-3xl font-bold text-accent">
+                    {Math.round(metrics?.wpm || 0)}
+                  </p>
                 </div>
-                <div className="text-center">
-                  <p className="text-text-secondary text-sm mb-2">Accuracy</p>
-                  <p className="text-3xl font-bold text-text">{Math.round(metrics.accuracy || 100)}%</p>
-                </div>
-                <div className="text-center">
-                  <p className="text-text-secondary text-sm mb-2">Errors</p>
-                  <p className="text-3xl font-bold text-error">{metrics.errorCount || 0}</p>
-                </div>
-                <div className="text-center">
-                  <p className="text-text-secondary text-sm mb-2">Time</p>
-                  <p className="text-3xl font-bold text-text">{Math.round(metrics.time || 0)}s</p>
+                <div className="card p-4">
+                  <p className="text-xs text-text-secondary uppercase mb-1">Accuracy</p>
+                  <p className="text-3xl font-bold text-correct">
+                    {Math.round(metrics?.accuracy || 100)}%
+                  </p>
                 </div>
               </div>
-            </div>
-
-            {/* Rankings */}
-            <div className="card p-8 mb-8">
-              <h3 className="text-xl font-bold text-text mb-6">Final Rankings</h3>
-              <div className="space-y-3">
-                {players.map((player, idx) => {
-                  const placement = idx + 1;
-                  const displayName = player.username || player.name || 'Player';
-                  return (
-                    <motion.div
-                      key={player.id}
-                      initial={{ opacity: 0, x: -20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: idx * 0.1 }}
-                      className={`flex items-center justify-between p-4 rounded-lg border transition-colors ${
-                        idx === 0 ? 'border-accent bg-accent/5' : 'border-border'
-                      }`}
-                    >
-                      <div className="flex items-center gap-4">
-                        <span className="text-2xl font-bold text-text-secondary w-8">{placement}</span>
-                        <div>
-                          <p className="font-semibold text-text">{displayName}</p>
-                          <p className="text-xs text-text-secondary">
-                            {player.finished ? `Finished in ${player.finishTime}s` : 'Did not finish'}
-                          </p>
-                        </div>
+              <div className="mb-6">
+                <h3 className="text-sm text-text-secondary uppercase mb-3">Final Standings</h3>
+                {(() => {
+                  const finalPlayers = [...(raceResults?.players || players)];
+                  return finalPlayers
+                    .sort((a, b) => (b.wpm || 0) - (a.wpm || 0))
+                    .map((p, i) => (
+                      <div
+                        key={p.id || i}
+                        className="flex justify-between items-center py-2 border-b border-border last:border-0"
+                      >
+                        <span className="flex items-center gap-2 text-text">
+                          {i === 0 && <span>👑</span>}
+                          {i === 1 && <span>🥈</span>}
+                          {i === 2 && <span>🥉</span>}
+                          {p.username || p.name}
+                        </span>
+                        <span className="text-accent font-bold">
+                          {Math.round(p.wpm || 0)} WPM
+                        </span>
                       </div>
-                      <div className="text-right">
-                        <p className="font-bold text-text text-lg">{Math.round(player.wpm)} WPM</p>
-                        <p className="text-xs text-text-secondary">{Math.round(player.accuracy)}% acc</p>
-                      </div>
-                    </motion.div>
-                  );
-                })}
+                    ));
+                })()}
+              </div>
+              <div className="flex gap-3 justify-center">
+                <button onClick={() => navigate('/multiplayer')} className="btn-ghost">
+                  Back to Lobby
+                </button>
+                <Link to="/profile" className="btn-primary">View Profile</Link>
               </div>
             </div>
-
-            {/* Action Buttons */}
-            <div className="flex gap-4 justify-center">
-              <button
-                onClick={handleRetry}
-                className="btn-primary flex items-center gap-2"
-              >
-                <RotateCcw className="w-4 h-4" />
-                Race Again
-              </button>
-              <button
-                onClick={() => navigate('/multiplayer')}
-                className="btn-secondary flex items-center gap-2"
-              >
-                <Home className="w-4 h-4" />
-                Back to Lobby
-              </button>
-            </div>
-          </motion.div>
+          </div>
         )}
       </div>
     </div>

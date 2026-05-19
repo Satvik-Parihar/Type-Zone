@@ -100,7 +100,7 @@ export const textSamples = {
       'select { case msg := <-ch: fmt.Println(msg) default: fmt.Println("no msg") }',
       'const fs = require("fs"); fs.writeFileSync("out.txt", "data");',
       'let sorted = arr.sort((a,b) => a - b);',
-      'const regex = /\w+@\w+\.\w+/g; const emails = text.match(regex) || [];' 
+      'const regex = /\\w+@\\w+\\.\\w+/g; const emails = text.match(regex) || [];' 
     ]
   }
 };
@@ -178,7 +178,7 @@ export const codeSnippets = {
     'const map = new Map(); map.set(key, value);',
     'const userNames = users.map(u => u.name).join(", ");',
     'fetch(url).then(r => r.json()).then(data => console.log(data));',
-    'const regex = /\w+@\w+\.\w+/g; const emails = text.match(regex) || [];',
+    'const regex = /\\w+@\\w+\\.\\w+/g; const emails = text.match(regex) || [];',
     'const fs = require("fs"); fs.writeFileSync("out.txt", "data");',
     'let sorted = arr.sort((a,b) => a - b);',
     'let promise = new Promise((res, rej) => res(42));',

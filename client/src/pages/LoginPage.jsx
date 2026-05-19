@@ -2,9 +2,11 @@ import { useState } from 'react';
 import { useLocation, useNavigate, Link } from 'react-router-dom';
 import { LogIn, UserPlus } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
 
 export default function LoginPage() {
   const { login, signup } = useAuth();
+  const toast = useToast();
   const navigate = useNavigate();
   const location = useLocation();
   const [mode, setMode] = useState('login');
@@ -23,6 +25,7 @@ export default function LoginPage() {
         await login(email, password);
       } else {
         await signup(username, email, password);
+        toast.success('Welcome to TypeZone!');
       }
       const from = location.state?.from || '/';
       navigate(from, { replace: true });

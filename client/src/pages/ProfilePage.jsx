@@ -1,11 +1,26 @@
 import { useState, useEffect, useMemo } from 'react';
 import { motion } from 'framer-motion';
-import { BarChart3, Clock, Target, Trophy, Award, TrendingUp } from 'lucide-react';
+import { BarChart3, Clock, Target, Trophy, Award, TrendingUp, Keyboard } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import api from '../utils/api';
 import { SkeletonCard, SkeletonTable } from '../ui/SkeletonLoader';
 import { useAuth } from '../context/AuthContext';
+
+const BADGE_DEFINITIONS = {
+  'wpm-50': { label: 'Speed Novice', desc: 'Reach 50 WPM', icon: '⚡' },
+  'wpm-75': { label: 'Speed Racer', desc: 'Reach 75 WPM', icon: '🚀' },
+  'wpm-100': { label: 'Century Typist', desc: 'Reach 100 WPM', icon: '💯' },
+  'wpm-150': { label: 'Speed Demon', desc: 'Reach 150 WPM', icon: '👹' },
+  'perfect-accuracy': { label: 'Flawless', desc: '100% accuracy on a test', icon: '✨' },
+  'accuracy-streak-10': { label: 'Precise', desc: '98%+ accuracy 10 times', icon: '🎯' },
+  'sessions-10': { label: 'Getting Started', desc: 'Complete 10 sessions', icon: '🌱' },
+  'sessions-100': { label: 'Dedicated', desc: 'Complete 100 sessions', icon: '🏅' },
+  'streak-7': { label: 'Week Warrior', desc: '7-day streak', icon: '🔥' },
+  'streak-30': { label: 'Monthly Master', desc: '30-day streak', icon: '👑' },
+};
+
+const ALL_BADGES = Object.keys(BADGE_DEFINITIONS);
 
 function ActivityCalendar({ sessions }) {
   const today = new Date();
@@ -87,12 +102,6 @@ export default function ProfilePage() {
   const [activeTab, setActiveTab] = useState('overview');
   const [loading, setLoading] = useState(true);
 
-  const keyboardRows = [
-    ['q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p'],
-    ['a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l'],
-    ['z', 'x', 'c', 'v', 'b', 'n', 'm']
-  ];
-
   useEffect(() => {
     if (!authLoading && !user) {
       navigate('/login', { replace: true, state: { from: '/profile' } });
@@ -131,13 +140,6 @@ export default function ProfilePage() {
 
   if (authLoading) return <SkeletonCard />;
   if (!user) return null;
-
-  const formatTime = (ms) => {
-    const hours = Math.floor(ms / 3600000);
-    const minutes = Math.floor((ms % 3600000) / 60000);
-    if (hours > 0) return `${hours}h ${minutes}m`;
-    return `${minutes}m`;
-  };
 
   const exportCSV = () => {
     const headers = ['Date','Mode','WPM','Raw WPM','Accuracy','Consistency','Time(s)'];
@@ -244,74 +246,6 @@ export default function ProfilePage() {
     };
   }, [sessions]);
 
-  const Chart = () => {
-    if (!analytics.recentWpm.length) {
-      return <p className="text-sm text-text-secondary">No sessions yet for trend analysis.</p>;
-    }
-
-    const values = analytics.recentWpm.map((item) => item.wpm);
-    const max = Math.max(...values, 1);
-    const min = Math.min(...values, 0);
-    const spread = Math.max(1, max - min);
-
-    const points = analytics.recentWpm.map((item, index) => {
-      const x = (index / Math.max(1, analytics.recentWpm.length - 1)) * 100;
-      const y = 100 - ((item.wpm - min) / spread) * 100;
-      return `${x},${y}`;
-    });
-
-    return (
-      <div className="space-y-3">
-        <div className="flex items-end justify-between text-sm">
-          <p className="text-text-secondary">Last {analytics.recentWpm.length} tests</p>
-          <p className="text-accent font-semibold">Peak {max} WPM</p>
-        </div>
-        <div className="h-44 w-full rounded-xl border border-border p-3 bg-card/40">
-          <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="w-full h-full">
-            <polyline
-              points={points.join(' ')}
-              fill="none"
-              stroke="var(--color-accent)"
-              strokeWidth="2"
-              vectorEffect="non-scaling-stroke"
-            />
-          </svg>
-        </div>
-      </div>
-    );
-  };
-
-  const KeyHeatmap = () => {
-    const colorForValue = (value) => {
-      if (value >= 95) return 'bg-green-500/20 border-green-500/40 text-green-300';
-      if (value >= 85) return 'bg-amber-500/20 border-amber-500/40 text-amber-300';
-      if (value > 0) return 'bg-red-500/20 border-red-500/40 text-red-300';
-      return 'bg-card border-border text-text-secondary';
-    };
-
-    return (
-      <div className="space-y-3">
-        {keyboardRows.map((row, rowIndex) => (
-          <div key={rowIndex} className="flex flex-wrap gap-2">
-            {row.map((key) => {
-              const acc = analytics.mergedKeyAccuracy[key] || 0;
-              return (
-                <div
-                  key={key}
-                  className={`w-11 h-11 rounded-lg border flex flex-col items-center justify-center ${colorForValue(acc)}`}
-                  title={`${key.toUpperCase()}: ${acc || 0}%`}
-                >
-                  <span className="text-xs font-semibold uppercase">{key}</span>
-                  <span className="text-[10px] leading-none">{acc || 0}</span>
-                </div>
-              );
-            })}
-          </div>
-        ))}
-      </div>
-    );
-  };
-
   const StatCard = ({ icon: Icon, label, value, unit = '' }) => (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -338,7 +272,15 @@ export default function ProfilePage() {
           <StatCard icon={TrendingUp} label="Best WPM" value={Math.round(profile.bestWpm)} />
           <StatCard icon={Target} label="Average WPM" value={Math.round(profile.avgWpm)} />
           <StatCard icon={BarChart3} label="Total Tests" value={profile.totalTests} />
-          <StatCard icon={Clock} label="Total Time" value={formatTime(profile.totalTimeMs)} />
+          <StatCard
+            icon={Clock}
+            label="Total Time"
+            value={(() => {
+              const h = Math.floor((profile.totalTimeMs || 0) / 3600000);
+              const m = Math.floor(((profile.totalTimeMs || 0) % 3600000) / 60000);
+              return h > 0 ? `${h}h ${m}m` : `${m}m`;
+            })()}
+          />
           <StatCard icon={Trophy} label="Current Streak" value={profile.currentStreak} unit="days" />
           <StatCard icon={Award} label="Longest Streak" value={profile.longestStreak} unit="days" />
         </div>
@@ -459,45 +401,71 @@ export default function ProfilePage() {
       </div>
     ),
 
-    analysis: () => (
-      <div className="space-y-6">
-        <div className="card p-6">
-          <h3 className="text-lg font-semibold text-text mb-4">Performance Over Time</h3>
-          <Chart />
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mt-5">
-            <div className="rounded-lg border border-border p-3">
-              <p className="text-xs text-text-secondary mb-1">Average Accuracy</p>
-              <p className="text-xl font-semibold text-text">{analytics.avgAccuracy}%</p>
-            </div>
-            <div className="rounded-lg border border-border p-3">
-              <p className="text-xs text-text-secondary mb-1">Personal Best</p>
-              <p className="text-xl font-semibold text-accent">{Math.round(analytics.bestSession?.wpm || 0)} WPM</p>
-            </div>
-            <div className="rounded-lg border border-border p-3">
-              <p className="text-xs text-text-secondary mb-1">Samples</p>
-              <p className="text-xl font-semibold text-text">{sessions.length}</p>
+    keys: () => (
+      <div>
+        <h3 className="text-lg font-semibold text-text mb-6">Key Analysis</h3>
+        {sessions.length === 0 ? (
+          <div className="card p-8 text-center text-text-secondary">
+            Complete at least one typing session to see per-key accuracy data.
+          </div>
+        ) : (
+          <div className="card p-6">
+            <p className="text-sm text-text-secondary mb-4">
+              Key accuracy across all sessions (green = strong, red = needs work)
+            </p>
+            {/* Keyboard heatmap - aggregate keyAccuracy from all sessions */}
+            {(() => {
+              const totals = {};
+              sessions.forEach((s) => {
+                if (!s.keyAccuracy) return;
+                Object.entries(s.keyAccuracy).forEach(([k, v]) => {
+                  if (!totals[k]) totals[k] = { sum: 0, count: 0 };
+                  totals[k].sum += Number(v) || 0;
+                  totals[k].count += 1;
+                });
+              });
+              const rows = [
+                ['q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p'],
+                ['a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l'],
+                ['z', 'x', 'c', 'v', 'b', 'n', 'm']
+              ];
+              const offsets = ['', 'ml-4', 'ml-8'];
+              return rows.map((row, ri) => (
+                <div key={ri} className={`flex gap-2 mb-2 ${offsets[ri]}`}>
+                  {row.map((key) => {
+                    const d = totals[key];
+                    const pct = d ? Math.round(d.sum / d.count) : null;
+                    const bg = pct === null
+                      ? 'var(--color-surface)'
+                      : pct > 85 ? '#16a34a'
+                      : pct > 65 ? '#ca8a04'
+                      : '#dc2626';
+                    const fg = pct === null ? 'var(--color-text-secondary)' : '#fff';
+                    return (
+                      <div
+                        key={key}
+                        className="w-9 h-9 rounded-md flex flex-col items-center justify-center border border-border text-xs font-mono font-bold cursor-default"
+                        style={{ background: bg, color: fg }}
+                        title={pct !== null ? `${key}: ${pct}% accuracy` : `${key}: no data`}
+                      >
+                        {key}
+                        {pct !== null && (
+                          <span className="text-[9px] opacity-80">{pct}%</span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              ));
+            })()}
+            <div className="mt-6 flex items-center gap-3 text-xs text-text-secondary">
+              <div className="w-4 h-4 rounded" style={{ background: '#16a34a' }} /> Strong (85%+)
+              <div className="w-4 h-4 rounded" style={{ background: '#ca8a04' }} /> Average (65-85%)
+              <div className="w-4 h-4 rounded" style={{ background: '#dc2626' }} /> Needs work (&lt;65%)
+              <div className="w-4 h-4 rounded border border-border" style={{ background: 'var(--color-surface)' }} /> No data
             </div>
           </div>
-        </div>
-
-        <div className="card p-6">
-          <h3 className="text-lg font-semibold text-text mb-4">Keyboard Heatmap</h3>
-          <KeyHeatmap />
-          <div className="mt-5">
-            <p className="text-sm text-text-secondary mb-2">Weakest Keys</p>
-            {analytics.weakKeys.length ? (
-              <div className="flex flex-wrap gap-2">
-                {analytics.weakKeys.map(([key, score]) => (
-                  <span key={key} className="px-3 py-1 rounded-full border border-border text-sm text-text">
-                    {key.toUpperCase()} {score}%
-                  </span>
-                ))}
-              </div>
-            ) : (
-              <p className="text-sm text-text-secondary">Complete more tests to unlock weak-key insights.</p>
-            )}
-          </div>
-        </div>
+        )}
       </div>
     ),
 
@@ -540,18 +508,30 @@ export default function ProfilePage() {
 
     achievements: () => (
       <div>
-        <div className="mb-6">
-          <h3 className="text-lg font-semibold text-text mb-4">Achievements</h3>
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-            {[1, 2, 3, 4, 5, 6].map((i) => (
-              <div key={i} className="card p-4 text-center opacity-50">
-                <Award className="w-8 h-8 mx-auto text-accent mb-2" />
-                <p className="text-xs text-text-secondary">Locked</p>
+        <h3 className="text-lg font-semibold text-text mb-6">Achievements</h3>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {ALL_BADGES.map((key) => {
+            const def = BADGE_DEFINITIONS[key];
+            const earned = (profile.achievements || []).includes(key);
+            return (
+              <div
+                key={key}
+                className={`card p-5 flex items-start gap-4 transition-all ${earned ? 'border-accent/40' : 'opacity-50 grayscale'}`}
+              >
+                <div className="text-3xl">{def.icon}</div>
+                <div>
+                  <p className={`font-semibold mb-1 ${earned ? 'text-text' : 'text-text-secondary'}`}>
+                    {def.label}
+                  </p>
+                  <p className="text-xs text-text-secondary">{def.desc}</p>
+                  {earned && (
+                    <span className="text-xs text-accent mt-1 inline-block">Earned ✓</span>
+                  )}
+                </div>
               </div>
-            ))}
-          </div>
+            );
+          })}
         </div>
-        <p className="text-text-secondary text-sm">Earn achievements by completing typing challenges and milestones.</p>
       </div>
     )
   };
@@ -570,7 +550,7 @@ export default function ProfilePage() {
           {[
             { id: 'overview', label: 'Overview', icon: BarChart3 },
             { id: 'sessions', label: 'Sessions Log', icon: Clock },
-            { id: 'analysis', label: 'Key Analysis', icon: Target },
+            { id: 'keys', label: 'Key Analysis', icon: Keyboard },
             { id: 'races', label: 'Race History', icon: Trophy },
             { id: 'achievements', label: 'Achievements', icon: Award }
           ].map(tab => {

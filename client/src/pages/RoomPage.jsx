@@ -18,6 +18,8 @@ export default function RoomPage() {
   const [isReady, setIsReady] = useState(false);
   const [countdownStarted, setCountdownStarted] = useState(false);
   const [countdown, setCountdown] = useState(3);
+  const [messages, setMessages] = useState([]);
+  const [chatInput, setChatInput] = useState('');
 
   useEffect(() => {
     if (!socket || !roomId) return;
@@ -52,12 +54,17 @@ export default function RoomPage() {
       navigate(`/multiplayer/race/${roomId}`);
     };
 
+    const handleRoomChat = (msg) => {
+      setMessages((prev) => [...prev.slice(-19), msg]);
+    };
+
     socket.on(roomEvents.ROOM_JOINED, handleRoomJoined);
     socket.on(roomEvents.ROOM_UPDATED, handleRoomUpdated);
     socket.on(roomEvents.ROOM_LEFT, handleRoomLeft);
     socket.on(roomEvents.ERROR, handleError);
     socket.on(raceEvents.RACE_COUNTDOWN, handleRaceCountdown);
     socket.on(raceEvents.RACE_STARTED, handleRaceStarted);
+    socket.on('room:chat', handleRoomChat);
 
     // Join room
     socket.emit(roomEvents.JOIN_ROOM, { roomId, password: null });
@@ -69,6 +76,7 @@ export default function RoomPage() {
       socket.off(roomEvents.ERROR, handleError);
       socket.off(raceEvents.RACE_COUNTDOWN, handleRaceCountdown);
       socket.off(raceEvents.RACE_STARTED, handleRaceStarted);
+      socket.off('room:chat', handleRoomChat);
     };
   }, [socket, roomId, navigate]);
 
@@ -84,6 +92,13 @@ export default function RoomPage() {
     if (socket) {
       socket.emit(roomEvents.LEAVE_ROOM);
     }
+  };
+
+  const sendChat = () => {
+    const text = chatInput.trim();
+    if (!text || !socket) return;
+    socket.emit('room:chat', { roomId, text });
+    setChatInput('');
   };
 
   const handleStartRace = () => {
@@ -128,21 +143,18 @@ export default function RoomPage() {
       <div className="max-w-4xl mx-auto px-4">
         {/* Countdown Overlay */}
         {countdownStarted && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50"
-          >
+          <div className="fixed inset-0 flex items-center justify-center bg-black/60 backdrop-blur-sm z-50 pointer-events-none">
             <motion.div
               key={countdown}
               initial={{ scale: 2, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.5, opacity: 0 }}
               className="text-9xl font-bold text-accent"
+              style={{ textShadow: '0 0 60px var(--color-accent)' }}
             >
-              {countdown === 0 ? 'GO!' : countdown}
+              {countdown > 0 ? countdown : 'GO!'}
             </motion.div>
-          </motion.div>
+          </div>
         )}
 
         {/* Room Header */}
@@ -225,6 +237,36 @@ export default function RoomPage() {
                   </motion.div>
                 );
               })}
+            </div>
+
+            <div className="card p-4 mt-4">
+              <h3 className="text-sm font-semibold text-text-secondary mb-3 uppercase tracking-wider">
+                Room Chat
+              </h3>
+              <div className="h-32 overflow-y-auto space-y-1 mb-3">
+                {messages.length === 0 && (
+                  <p className="text-xs text-text-secondary opacity-50">No messages yet...</p>
+                )}
+                {messages.map((m, i) => (
+                  <p key={i} className="text-xs text-text">
+                    <span className="text-accent font-semibold">{m.username}: </span>
+                    {m.text}
+                  </p>
+                ))}
+              </div>
+              <div className="flex gap-2">
+                <input
+                  className="input-field text-sm flex-1 py-1.5"
+                  placeholder="Say something..."
+                  value={chatInput}
+                  onChange={(e) => setChatInput(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && sendChat()}
+                  maxLength={200}
+                />
+                <button onClick={sendChat} className="btn-primary text-sm px-3 py-1.5">
+                  Send
+                </button>
+              </div>
             </div>
           </div>
 

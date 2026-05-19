@@ -271,6 +271,17 @@ module.exports = (io) => {
       socket.emit('rooms:list', publicRooms);
     });
 
+    socket.on('room:chat', ({ roomId, text }) => {
+      const user = socket.user;
+      const safeText = String(text || '').slice(0, 200);
+      const msg = {
+        username: user?.username || 'Guest',
+        text: safeText,
+        ts: Date.now(),
+      };
+      io.to(roomId).emit('room:chat', msg);
+    });
+
     // Create room
     socket.on('room:create', (data) => {
       const { name, password, isPrivate } = data;
