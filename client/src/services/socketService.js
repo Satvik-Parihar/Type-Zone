@@ -7,7 +7,7 @@ export function initializeSocket(token) {
         return socket;
     }
 
-    const SERVER_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+    const SERVER_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:5000';
 
     socket = io(SERVER_URL, {
         auth: {

@@ -1,5 +1,6 @@
 const RaceHistory = require('../models/RaceHistory');
 const { submitTypingSession } = require('../services/typingService');
+const { socketAuth } = require('../middleware/auth');
 
 const rooms = new Map();
 const activeRaces = new Map();
@@ -261,9 +262,9 @@ function finishRace(io, roomId) {
 }
 
 module.exports = (io) => {
-  io.on('connection', (socket) => {
-    console.log('User connected:', socket.id);
+  io.use(socketAuth);
 
+  io.on('connection', (socket) => {
     // Get rooms list
     socket.on('rooms:get', () => {
       const publicRooms = getPublicRooms();
@@ -462,8 +463,6 @@ module.exports = (io) => {
     });
 
     socket.on('disconnect', () => {
-      console.log('User disconnected:', socket.id);
-      
       // Handle disconnection - remove user from any rooms they're in
       const user = socket.user;
       if (!user) return;
